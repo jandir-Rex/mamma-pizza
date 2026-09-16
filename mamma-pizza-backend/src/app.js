@@ -14,6 +14,13 @@ app.get("/api/health", (req, res) => {
 app.use("/api/auth", require("./modules/auth/auth.routes"));
 app.use("/api/productos", require("./modules/productos/productos.routes"));
 app.use("/api/pedidos", require("./modules/pedidos/pedidos.routes"));
+app.use("/api/mesas", require("./modules/mesas/mesas.routes"));
+app.use("/api/repartidores", require("./modules/repartidores/repartidores.routes"));
+
+app.use((req, res) => {
+  res.status(404).json({ error: "Ruta no encontrada" });
+});
+
 app.use(errorHandler);
 
 module.exports = app;

@@ -1,122 +1,128 @@
 const prisma = require("../../config/prisma");
 
-// ---------- CATEGORÍAS ----------
-
 async function crearCategoria({ nombre }) {
-    return prisma.categoria.create({ data: { nombre } });
+  return prisma.categoria.create({ data: { nombre } });
 }
 
 async function listarCategorias() {
-    return prisma.categoria.findMany({ orderBy: { nombre: "asc" } });
+  return prisma.categoria.findMany({ orderBy: { nombre: "asc" } });
 }
 
-// ---------- PRODUCTOS ----------
-
 async function crearProducto({ nombre, descripcion, categoriaId, imagenUrl, variantes }) {
-    return prisma.producto.create({
-        data: {
-            nombre,
-            descripcion,
-            categoriaId,
-            imagenUrl,
-            variantes: {
-                create: variantes.map((v) => ({ tamano: v.tamano, precio: v.precio })),
-            },
-        },
-        include: { variantes: true, categoria: true },
-    });
+  const categoria = await prisma.categoria.findUnique({ where: { id: categoriaId } });
+  if (!categoria) {
+    const error = new Error("La categoría indicada no existe");
+    error.status = 400;
+    throw error;
+  }
+
+  return prisma.producto.create({
+    data: {
+      nombre,
+      descripcion,
+      categoriaId,
+      imagenUrl,
+      variantes: {
+        create: variantes.map((v) => ({ tamano: v.tamano, precio: v.precio })),
+      },
+    },
+    include: { variantes: true, categoria: true },
+  });
 }
 
 async function listarMenu() {
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
 
-    const productos = await prisma.producto.findMany({
-        where: { disponible: true },
+  const productos = await prisma.producto.findMany({
+    where: { disponible: true },
+    include: {
+      categoria: true,
+      variantes: {
         include: {
-            categoria: true,
-            variantes: {
-                include: {
-                    disponibilidad: {
-                        where: { fecha: hoy },
-                    },
-                },
-            },
+          disponibilidad: { where: { fecha: hoy } },
         },
-        orderBy: { nombre: "asc" },
-    });
+      },
+    },
+    orderBy: { nombre: "asc" },
+  });
 
-    // Aplana la info de disponibilidad de hoy junto a cada variante
-    return productos.map((p) => ({
-        ...p,
-        variantes: p.variantes.map((v) => {
-            const stockHoy = v.disponibilidad[0];
-            return {
-                id: v.id,
-                tamano: v.tamano,
-                precio: v.precio,
-                disponible: v.disponible,
-            };
-        }),
-    }));
+  return productos.map((p) => ({
+    ...p,
+    variantes: p.variantes.map((v) => ({
+      id: v.id,
+      tamano: v.tamano,
+      precio: v.precio,
+      disponible: v.disponible,
+    })),
+  }));
 }
 
 async function obtenerProductoPorId(id) {
-    const producto = await prisma.producto.findUnique({
-        where: { id },
-        include: { categoria: true, variantes: true },
-    });
+  const producto = await prisma.producto.findUnique({
+    where: { id },
+    include: { categoria: true, variantes: true },
+  });
 
-    if (!producto) {
-        const error = new Error("Producto no encontrado");
-        error.status = 404;
-        throw error;
-    }
+  if (!producto) {
+    const error = new Error("Producto no encontrado");
+    error.status = 404;
+    throw error;
+  }
 
-    return producto;
+  return producto;
 }
 
 async function actualizarProducto(id, datos) {
-    await obtenerProductoPorId(id); // valida que exista
+  await obtenerProductoPorId(id);
 
-    return prisma.producto.update({
-        where: { id },
-        data: datos,
-        include: { categoria: true, variantes: true },
-    });
+  if (datos.categoriaId) {
+    const categoria = await prisma.categoria.findUnique({ where: { id: datos.categoriaId } });
+    if (!categoria) {
+      const error = new Error("La categoría indicada no existe");
+      error.status = 400;
+      throw error;
+    }
+  }
+
+  return prisma.producto.update({
+    where: { id },
+    data: datos,
+    include: { categoria: true, variantes: true },
+  });
 }
 
 async function desactivarProducto(id) {
-    await obtenerProductoPorId(id);
+  await obtenerProductoPorId(id);
 
-    return prisma.producto.update({
-        where: { id },
-        data: { disponible: false },
-    });
+  return prisma.producto.update({
+    where: { id },
+    data: { disponible: false },
+  });
 }
 
 async function actualizarDisponibilidadVariante(id, disponible) {
-    const variante = await prisma.productoVariante.findUnique({ where: { id } });
+  const variante = await prisma.productoVariante.findUnique({ where: { id } });
 
-    if (!variante) {
-        const error = new Error("Variante no encontrada");
-        error.status = 404;
-        throw error;
-    }
+  if (!variante) {
+    const error = new Error("Variante no encontrada");
+    error.status = 404;
+    throw error;
+  }
 
-    return prisma.productoVariante.update({
-        where: { id },
-        data: { disponible },
-    });
+  return prisma.productoVariante.update({
+    where: { id },
+    data: { disponible },
+  });
 }
 
 module.exports = {
-    crearCategoria,
-    listarCategorias,
-    crearProducto,
-    listarMenu,
-    obtenerProductoPorId,
-    actualizarProducto,
-    desactivarProducto,
-    actualizarDisponibilidadVariante,
+  crearCategoria,
+  listarCategorias,
+  crearProducto,
+  listarMenu,
+  obtenerProductoPorId,
+  actualizarProducto,
+  desactivarProducto,
+  actualizarDisponibilidadVariante,
 };

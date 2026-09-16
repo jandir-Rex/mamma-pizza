@@ -15,6 +15,7 @@ enum RolUsuario {
   CLIENTE
   ADMIN
   REPARTIDOR
+  MOZO
 }
 
 enum EstadoPedido {

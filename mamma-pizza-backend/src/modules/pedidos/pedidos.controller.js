@@ -11,7 +11,7 @@ function manejarZodError(err, res, next) {
 async function crearPedido(req, res, next) {
   try {
     const datos = crearPedidoSchema.parse(req.body);
-    const pedido = await pedidosService.crearPedido(req.usuario.id, datos);
+    const pedido = await pedidosService.crearPedido(req.usuario.id, req.usuario.rol, datos);
     res.status(201).json(pedido);
   } catch (err) {
     manejarZodError(err, res, next);
@@ -36,6 +36,17 @@ async function actualizarEstado(req, res, next) {
     res.json(pedido);
   } catch (err) {
     manejarZodError(err, res, next);
+  }
+}
+
+async function asignarRepartidor(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    const { repartidorId } = req.body;
+    const pedido = await pedidosService.asignarRepartidor(id, Number(repartidorId));
+    res.json(pedido);
+  } catch (err) {
+    next(err);
   }
 }
 
@@ -67,4 +78,12 @@ async function obtenerPorId(req, res, next) {
   }
 }
 
-module.exports = { crearPedido, confirmarPago, actualizarEstado, misPedidos, listarTodos, obtenerPorId };
+module.exports = {
+  crearPedido,
+  confirmarPago,
+  actualizarEstado,
+  asignarRepartidor,
+  misPedidos,
+  listarTodos,
+  obtenerPorId,
+};

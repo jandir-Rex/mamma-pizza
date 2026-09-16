@@ -1,4 +1,4 @@
-const { registroSchema, loginSchema } = require("./auth.validation");
+const { registroSchema, loginSchema, staffSchema } = require("./auth.validation");
 const authService = require("./auth.service");
 
 async function registrar(req, res, next) {
@@ -27,4 +27,17 @@ async function login(req, res, next) {
   }
 }
 
-module.exports = { registrar, login };
+async function crearStaff(req, res, next) {
+  try {
+    const datos = staffSchema.parse(req.body);
+    const resultado = await authService.crearStaff(datos);
+    res.status(201).json(resultado);
+  } catch (err) {
+    if (err.name === "ZodError") {
+      return res.status(400).json({ error: err.issues[0].message });
+    }
+    next(err);
+  }
+} 
+
+module.exports = { registrar, login, crearStaff };

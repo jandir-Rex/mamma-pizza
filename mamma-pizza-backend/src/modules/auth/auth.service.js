@@ -3,7 +3,7 @@ const jwt = require("jsonwebtoken");
 const prisma = require("../../config/prisma");
 const { jwtSecret } = require("../../config/env");
 
-async function registrar({ nombre, email, password, telefono, rol }) {
+async function registrar({ nombre, email, password, telefono }) {
   const existente = await prisma.usuario.findUnique({ where: { email } });
   if (existente) {
     const error = new Error("Ese email ya está registrado");
@@ -14,14 +14,29 @@ async function registrar({ nombre, email, password, telefono, rol }) {
   const passwordHash = await bcrypt.hash(password, 10);
 
   const usuario = await prisma.usuario.create({
-    data: {
-      nombre,
-      email,
-      passwordHash,
-      telefono,
-      rol: rol || "CLIENTE",
-    },
+    data: { nombre, email, passwordHash, telefono, rol: "CLIENTE" },
   });
+
+  return generarRespuesta(usuario);
+}
+
+async function crearStaff({ nombre, email, password, telefono, rol }) {
+  const existente = await prisma.usuario.findUnique({ where: { email } });
+  if (existente) {
+    const error = new Error("Ese email ya está registrado");
+    error.status = 409;
+    throw error;
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+
+  const usuario = await prisma.usuario.create({
+    data: { nombre, email, passwordHash, telefono, rol },
+  });
+
+  if (rol === "REPARTIDOR") {
+    await prisma.repartidor.create({ data: { usuarioId: usuario.id } });
+  }
 
   return generarRespuesta(usuario);
 }
@@ -62,4 +77,4 @@ function generarRespuesta(usuario) {
   };
 }
 
-module.exports = { registrar, login };
+module.exports = { registrar, login, crearStaff };
