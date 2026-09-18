@@ -1,11 +1,18 @@
-// src/components/RutaProtegida.jsx
 import { Navigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext"; // ajusta según cómo exportes el hook
+import { useAuth } from "../context/AuthContext";
 
 export default function RutaProtegida({ children }) {
-    const { user } = useAuth(); // o el nombre que uses en tu contexto
+    const { usuario, cargando } = useAuth();
 
-    if (!user) {
+    if (cargando) {
+        return (
+            <div className="min-h-screen flex items-center justify-center text-gray-500">
+                Cargando...
+            </div>
+        );
+    }
+
+    if (!usuario) {
         return <Navigate to="/login" replace />;
     }
 
