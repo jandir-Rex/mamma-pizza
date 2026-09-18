@@ -17,7 +17,6 @@ const TRANSICIONES_VALIDAS = {
 async function crearPedido(clienteId, rolSolicitante, datos) {
   const { canal, direccionId, mesaId, metodoPago, items } = datos;
 
-  // El mozo solo puede tomar pedidos de salón, nunca delivery
   if (rolSolicitante === "MOZO" && canal !== "SALON") {
     const error = new Error("El mozo solo puede registrar pedidos de salón");
     error.status = 403;
@@ -53,7 +52,7 @@ async function crearPedido(clienteId, rolSolicitante, datos) {
 
     for (const item of items) {
       const filas = await tx.$queryRaw`
-        SELECT pv.id, pv.precio, pv.disponible AS variante_disponible, p.disponible AS producto_disponible
+        SELECT pv.id, pv.precio, pv.tamano, pv.disponible AS variante_disponible, p.disponible AS producto_disponible
         FROM producto_variantes pv
         JOIN productos p ON p.id = pv."productoId"
         WHERE pv.id = ${item.productoVarianteId}
@@ -73,7 +72,35 @@ async function crearPedido(clienteId, rolSolicitante, datos) {
         throw error;
       }
 
-      const precioUnitario = Number(variante.precio);
+      let precioUnitario = Number(variante.precio);
+      const agregadosParaCrear = [];
+
+      if (item.agregados && item.agregados.length > 0) {
+        for (const ag of item.agregados) {
+          const agregado = await tx.agregado.findUnique({
+            where: { id: ag.agregadoId },
+            include: { precios: { where: { tamano: variante.tamano } } },
+          });
+
+          if (!agregado || !agregado.disponible) {
+            const error = new Error("Uno de los agregados elegidos ya no está disponible");
+            error.status = 409;
+            throw error;
+          }
+
+          const precioAgregado = agregado.precios[0];
+          if (!precioAgregado) {
+            const error = new Error(`El agregado "${agregado.nombre}" no tiene precio para el tamaño "${variante.tamano}"`);
+            error.status = 400;
+            throw error;
+          }
+
+          const precioAg = Number(precioAgregado.precio);
+          precioUnitario += precioAg;
+          agregadosParaCrear.push({ agregadoId: agregado.id, precioUnitario: precioAg });
+        }
+      }
+
       subtotal += precioUnitario * item.cantidad;
 
       itemsParaCrear.push({
@@ -81,6 +108,7 @@ async function crearPedido(clienteId, rolSolicitante, datos) {
         cantidad: item.cantidad,
         precioUnitario,
         notas: item.notas,
+        agregados: agregadosParaCrear.length > 0 ? { create: agregadosParaCrear } : undefined,
       });
     }
 
@@ -99,7 +127,7 @@ async function crearPedido(clienteId, rolSolicitante, datos) {
           create: { metodo: metodoPago, monto: subtotal, estado: "pendiente" },
         },
       },
-      include: { items: true, pago: true },
+      include: { items: { include: { agregados: true } }, pago: true },
     });
   });
 
@@ -220,14 +248,18 @@ async function asignarRepartidor(pedidoId, repartidorId) {
 async function listarPedidosCliente(clienteId) {
   return prisma.pedido.findMany({
     where: { clienteId },
-    include: { items: true, pago: true },
+    include: { items: { include: { agregados: true } }, pago: true },
     orderBy: { createdAt: "desc" },
   });
 }
 
 async function listarTodos() {
   return prisma.pedido.findMany({
-    include: { items: true, pago: true, cliente: { select: { nombre: true, telefono: true } } },
+    include: {
+      items: { include: { agregados: true } },
+      pago: true,
+      cliente: { select: { nombre: true, telefono: true } },
+    },
     orderBy: { createdAt: "desc" },
   });
 }
@@ -235,7 +267,7 @@ async function listarTodos() {
 async function obtenerPorId(id) {
   const pedido = await prisma.pedido.findUnique({
     where: { id },
-    include: { items: true, pago: true },
+    include: { items: { include: { agregados: true } }, pago: true },
   });
 
   if (!pedido) {

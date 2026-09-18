@@ -187,6 +187,7 @@ model PedidoItem {
   cantidad            Int
   precioUnitario      Decimal          @db.Decimal(10, 2)
   notas               String?
+  agregados           PedidoItemAgregado[]  
 
   @@map("pedido_items")
 }
@@ -203,4 +204,37 @@ model Pago {
   createdAt      DateTime       @default(now())
 
   @@map("pagos")
+}
+
+model Agregado {
+  id         Int      @id @default(autoincrement())
+  nombre     String   @unique
+  disponible Boolean  @default(true)
+
+  precios             AgregadoPrecio[]
+  pedidoItemAgregados PedidoItemAgregado[]
+
+  @@map("agregados")
+}
+
+model AgregadoPrecio {
+  id         Int      @id @default(autoincrement())
+  agregadoId Int
+  agregado   Agregado @relation(fields: [agregadoId], references: [id])
+  tamano     String
+  precio     Decimal  @db.Decimal(10, 2)
+
+  @@unique([agregadoId, tamano])
+  @@map("agregado_precios")
+}
+
+model PedidoItemAgregado {
+  id             Int        @id @default(autoincrement())
+  pedidoItemId   Int
+  pedidoItem     PedidoItem @relation(fields: [pedidoItemId], references: [id])
+  agregadoId     Int
+  agregado       Agregado   @relation(fields: [agregadoId], references: [id])
+  precioUnitario Decimal    @db.Decimal(10, 2)
+
+  @@map("pedido_item_agregados")
 }

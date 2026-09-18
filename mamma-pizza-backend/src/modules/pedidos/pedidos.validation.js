@@ -1,9 +1,14 @@
 const { z } = require("zod");
 
+const agregadoItemSchema = z.object({
+  agregadoId: z.number().int().positive(),
+});
+
 const itemSchema = z.object({
   productoVarianteId: z.number().int().positive(),
   cantidad: z.number().int().positive(),
   notas: z.string().optional(),
+  agregados: z.array(agregadoItemSchema).optional(),
 });
 
 const crearPedidoSchema = z

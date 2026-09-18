@@ -16,6 +16,7 @@ app.use("/api/productos", require("./modules/productos/productos.routes"));
 app.use("/api/pedidos", require("./modules/pedidos/pedidos.routes"));
 app.use("/api/mesas", require("./modules/mesas/mesas.routes"));
 app.use("/api/repartidores", require("./modules/repartidores/repartidores.routes"));
+app.use("/api/agregados", require("./modules/agregados/agregados.routes")); 
 
 app.use((req, res) => {
   res.status(404).json({ error: "Ruta no encontrada" });
