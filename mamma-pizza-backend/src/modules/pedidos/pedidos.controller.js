@@ -32,7 +32,7 @@ async function actualizarEstado(req, res, next) {
   try {
     const id = Number(req.params.id);
     const { estado } = actualizarEstadoSchema.parse(req.body);
-    const pedido = await pedidosService.actualizarEstado(id, estado);
+    const pedido = await pedidosService.actualizarEstado(id, estado, req.usuario);
     res.json(pedido);
   } catch (err) {
     manejarZodError(err, res, next);
@@ -45,6 +45,15 @@ async function asignarRepartidor(req, res, next) {
     const { repartidorId } = req.body;
     const pedido = await pedidosService.asignarRepartidor(id, Number(repartidorId));
     res.json(pedido);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function misEntregas(req, res, next) {
+  try {
+    const entregas = await pedidosService.misEntregas(req.usuario.id);
+    res.json(entregas);
   } catch (err) {
     next(err);
   }
@@ -83,6 +92,7 @@ module.exports = {
   confirmarPago,
   actualizarEstado,
   asignarRepartidor,
+  misEntregas,
   misPedidos,
   listarTodos,
   obtenerPorId,

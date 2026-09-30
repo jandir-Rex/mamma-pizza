@@ -54,6 +54,14 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> actualizarPerfil({String? nombre, String? telefono}) async {
+    final actualizado = await AuthService.actualizarPerfil(nombre: nombre, telefono: telefono);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString("nombre", actualizado.nombre);
+    usuario = actualizado;
+    notifyListeners();
+  }
+
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();

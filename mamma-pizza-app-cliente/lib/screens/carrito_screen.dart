@@ -15,7 +15,9 @@ class CarritoScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text("Tu pedido")),
       body: carrito.items.isEmpty
-          ? const Center(child: Text("Aún no has agregado nada", style: TextStyle(color: AppColors.gray)))
+          ? const Center(
+              child: Text("Aún no has agregado nada",
+                  style: TextStyle(color: AppColors.gray)))
           : Column(
               children: [
                 Expanded(
@@ -27,31 +29,50 @@ class CarritoScreen extends StatelessWidget {
                       return Card(
                         margin: const EdgeInsets.only(bottom: 10),
                         child: ListTile(
-                          title: Text("${item.producto.nombre} (${item.variante.tamano})"),
+                          title: Text(
+                              "${item.producto.nombre} (${item.variante.tamano})"),
                           subtitle: Text(
                             [
-                              if (item.agregados.isNotEmpty) "+ ${item.agregados.map((a) => a.nombre).join(', ')}",
+                              if (item.agregados.isNotEmpty)
+                                "+ ${item.agregados.map((a) => a.nombre).join(', ')}",
                               if (item.notas.isNotEmpty) '"${item.notas}"',
                             ].join("\n"),
                           ),
-                          trailing: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text("S/. ${item.subtotal.toStringAsFixed(2)}", style: const TextStyle(fontWeight: FontWeight.bold)),
-                              Row(
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.remove, size: 18),
-                                    onPressed: () => context.read<CarritoProvider>().cambiarCantidad(index, -1),
-                                  ),
-                                  Text("${item.cantidad}"),
-                                  IconButton(
-                                    icon: const Icon(Icons.add, size: 18),
-                                    onPressed: () => context.read<CarritoProvider>().cambiarCantidad(index, 1),
-                                  ),
-                                ],
-                              ),
-                            ],
+                          trailing: SizedBox(
+                            width: 110,
+                            height: 70,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text("S/. ${item.subtotal.toStringAsFixed(2)}",
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13)),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      icon: const Icon(Icons.remove, size: 18),
+                                      onPressed: () => context
+                                          .read<CarritoProvider>()
+                                          .cambiarCantidad(index, -1),
+                                    ),
+                                    Text("${item.cantidad}"),
+                                    IconButton(
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      icon: const Icon(Icons.add, size: 18),
+                                      onPressed: () => context
+                                          .read<CarritoProvider>()
+                                          .cambiarCantidad(index, 1),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       );
@@ -62,7 +83,12 @@ class CarritoScreen extends StatelessWidget {
                   padding: const EdgeInsets.all(16),
                   decoration: const BoxDecoration(
                     color: Colors.white,
-                    boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, -2))],
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.black12,
+                          blurRadius: 6,
+                          offset: Offset(0, -2))
+                    ],
                   ),
                   child: SafeArea(
                     top: false,
@@ -71,15 +97,21 @@ class CarritoScreen extends StatelessWidget {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text("Total", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                            const Text("Total",
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 18)),
                             Text("S/. ${carrito.total.toStringAsFixed(2)}",
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.primary)),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                    color: AppColors.primary)),
                           ],
                         ),
                         const SizedBox(height: 12),
                         ElevatedButton(
                           onPressed: () {
-                            Navigator.of(context).push(deslizarDesdeDerecha(const CheckoutScreen()));
+                            Navigator.of(context).push(
+                                deslizarDesdeDerecha(const CheckoutScreen()));
                           },
                           child: const Text("Continuar"),
                         ),

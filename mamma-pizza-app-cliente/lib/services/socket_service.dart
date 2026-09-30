@@ -12,7 +12,7 @@ class SocketService {
     if (token == null) return null;
 
     _socket = io_client.io(
-      "http://10.0.2.2:4000",
+      "http://localhost:4000",
       io_client.OptionBuilder()
           .setTransports(['websocket'])
           .setAuth({"token": token})

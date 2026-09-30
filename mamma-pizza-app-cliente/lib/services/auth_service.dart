@@ -27,4 +27,12 @@ class AuthService {
     });
     return AuthResultado(token: data["token"], usuario: Usuario.fromJson(data["usuario"]));
   }
+
+  static Future<Usuario> actualizarPerfil({String? nombre, String? telefono}) async {
+    final data = await ApiClient.patch("/auth/perfil", {
+      if (nombre != null && nombre.isNotEmpty) "nombre": nombre,
+      if (telefono != null) "telefono": telefono,
+    });
+    return Usuario.fromJson(data);
+  }
 }

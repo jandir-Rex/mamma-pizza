@@ -9,5 +9,6 @@ const router = Router();
 router.post("/registro", authController.registrar);
 router.post("/login", loginLimiter, authController.login);
 router.post("/staff", verificarToken, permitirRoles("ADMIN"), authController.crearStaff);
+router.patch("/perfil", verificarToken, authController.actualizarPerfil);
 
 module.exports = router;

@@ -163,13 +163,24 @@ async function confirmarPago(pedidoId) {
   return pedido;
 }
 
-async function actualizarEstado(pedidoId, nuevoEstado) {
+// "solicitante" = req.usuario ({ id, rol }) de quien hace la petición.
+// Si es REPARTIDOR, se verifica que el pedido esté realmente asignado a él.
+async function actualizarEstado(pedidoId, nuevoEstado, solicitante) {
   const resultado = await prisma.$transaction(async (tx) => {
     const pedido = await tx.pedido.findUnique({ where: { id: pedidoId } });
     if (!pedido) {
       const error = new Error("Pedido no encontrado");
       error.status = 404;
       throw error;
+    }
+
+    if (solicitante && solicitante.rol === "REPARTIDOR") {
+      const repartidor = await tx.repartidor.findUnique({ where: { usuarioId: solicitante.id } });
+      if (!repartidor || pedido.repartidorId !== repartidor.id) {
+        const error = new Error("No tienes asignado este pedido");
+        error.status = 403;
+        throw error;
+      }
     }
 
     const permitidos = TRANSICIONES_VALIDAS[pedido.estado] || [];
@@ -245,6 +256,28 @@ async function asignarRepartidor(pedidoId, repartidorId) {
   return resultado;
 }
 
+// Entregas del repartidor autenticado: activas + completadas recientes.
+async function misEntregas(usuarioId) {
+  const repartidor = await prisma.repartidor.findUnique({ where: { usuarioId } });
+  if (!repartidor) {
+    const error = new Error("No tienes un perfil de repartidor asociado");
+    error.status = 404;
+    throw error;
+  }
+
+  return prisma.pedido.findMany({
+    where: { repartidorId: repartidor.id, estado: { not: "CANCELADO" } },
+    include: {
+      items: { include: { agregados: true } },
+      pago: true,
+      direccion: true,
+      cliente: { select: { nombre: true, telefono: true } },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+  });
+}
+
 async function listarPedidosCliente(clienteId) {
   return prisma.pedido.findMany({
     where: { clienteId },
@@ -267,7 +300,7 @@ async function listarTodos() {
 async function obtenerPorId(id) {
   const pedido = await prisma.pedido.findUnique({
     where: { id },
-    include: { items: { include: { agregados: true } }, pago: true },
+    include: { items: { include: { agregados: true } }, pago: true, direccion: true },
   });
 
   if (!pedido) {
@@ -283,6 +316,7 @@ module.exports = {
   confirmarPago,
   actualizarEstado,
   asignarRepartidor,
+  misEntregas,
   listarPedidosCliente,
   listarTodos,
   obtenerPorId,

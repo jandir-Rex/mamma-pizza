@@ -1,4 +1,4 @@
-const { registroSchema, loginSchema, staffSchema } = require("./auth.validation");
+const { registroSchema, loginSchema, staffSchema, actualizarPerfilSchema } = require("./auth.validation");
 const authService = require("./auth.service");
 
 async function registrar(req, res, next) {
@@ -38,6 +38,17 @@ async function crearStaff(req, res, next) {
     }
     next(err);
   }
-} 
+}
 
-module.exports = { registrar, login, crearStaff };
+async function actualizarPerfil(req, res, next) {
+  try {
+    const datos = actualizarPerfilSchema.parse(req.body);
+    const usuario = await authService.actualizarPerfil(req.usuario.id, datos);
+    res.json(usuario);
+  } catch (err) {
+    if (err.name === "ZodError") return res.status(400).json({ error: err.issues[0].message });
+    next(err);
+  }
+}
+
+module.exports = { registrar, login, crearStaff, actualizarPerfil };

@@ -20,4 +20,9 @@ const staffSchema = z.object({
   rol: z.enum(["ADMIN", "REPARTIDOR", "MOZO"], { message: "Rol de staff inválido" }),
 });
 
-module.exports = { registroSchema, loginSchema, staffSchema };
+const actualizarPerfilSchema = z.object({
+  nombre: z.string().min(2, "El nombre es muy corto").optional(),
+  telefono: z.string().optional(),
+});
+
+module.exports = { registroSchema, loginSchema, staffSchema, actualizarPerfilSchema };

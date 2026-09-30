@@ -21,4 +21,8 @@ class DireccionesService {
     });
     return Direccion.fromJson(data);
   }
+
+  static Future<void> eliminar(int id) async {
+    await ApiClient.delete("/direcciones/$id");
+  }
 }

@@ -59,6 +59,21 @@ async function login({ email, password }) {
   return generarRespuesta(usuario);
 }
 
+async function actualizarPerfil(usuarioId, datos) {
+  const usuario = await prisma.usuario.update({
+    where: { id: usuarioId },
+    data: datos,
+  });
+
+  return {
+    id: usuario.id,
+    nombre: usuario.nombre,
+    email: usuario.email,
+    telefono: usuario.telefono,
+    rol: usuario.rol,
+  };
+}
+
 function generarRespuesta(usuario) {
   const token = jwt.sign(
     { id: usuario.id, rol: usuario.rol },
@@ -77,4 +92,4 @@ function generarRespuesta(usuario) {
   };
 }
 
-module.exports = { registrar, login, crearStaff };
+module.exports = { registrar, login, crearStaff, actualizarPerfil };

@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 // emulador, no a tu PC. Se usa 10.0.2.2 para llegar a tu máquina.
 // Si pruebas en un dispositivo físico, reemplaza por la IP de tu PC en la red local (ej. 192.168.1.X).
 class ApiClient {
-  static const String baseUrl = "http://10.0.2.2:4000/api";
+  static const String baseUrl = "http://localhost:4000/api";
 
   static Future<String?> _token() async {
     final prefs = await SharedPreferences.getInstance();
@@ -54,5 +54,13 @@ class ApiClient {
       throw Exception(data["error"] ?? "Error inesperado");
     }
     return data;
+  }
+
+  static Future<void> delete(String path) async {
+    final res = await http.delete(Uri.parse("$baseUrl$path"), headers: await _headers());
+    if (res.statusCode >= 400) {
+      final data = jsonDecode(res.body);
+      throw Exception(data["error"] ?? "Error inesperado");
+    }
   }
 }

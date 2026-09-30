@@ -7,6 +7,7 @@ import '../models/agregado.dart';
 import '../services/productos_service.dart';
 import '../providers/auth_provider.dart';
 import '../providers/carrito_provider.dart';
+import '../widgets/pizza_loading.dart';
 import 'producto_detalle_sheet.dart';
 import 'carrito_screen.dart';
 
@@ -66,7 +67,7 @@ class _MenuScreenState extends State<MenuScreen> {
     return Scaffold(
       body: SafeArea(
         child: _cargando
-            ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+            ? const Center(child: PizzaLoading(mensaje: "Preparando el menú..."))
             : _error != null
                 ? Center(
                     child: Column(

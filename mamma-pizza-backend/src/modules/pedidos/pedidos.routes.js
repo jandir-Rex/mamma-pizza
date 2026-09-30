@@ -9,6 +9,7 @@ router.use(verificarToken);
 
 router.post("/", permitirRoles("CLIENTE", "ADMIN", "MOZO"), pedidosController.crearPedido);
 router.get("/mios", permitirRoles("CLIENTE"), pedidosController.misPedidos);
+router.get("/repartidor/mis-entregas", permitirRoles("REPARTIDOR"), pedidosController.misEntregas);
 router.get("/", permitirRoles("ADMIN"), pedidosController.listarTodos);
 router.get("/:id", pedidosController.obtenerPorId);
 router.patch("/:id/confirmar-pago", permitirRoles("ADMIN"), pedidosController.confirmarPago);
