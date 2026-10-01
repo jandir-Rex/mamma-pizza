@@ -5,7 +5,6 @@ import '../models/producto.dart';
 import '../models/agregado.dart';
 import '../services/productos_service.dart';
 import '../providers/auth_provider.dart';
-import '../providers/carrito_provider.dart';
 import '../widgets/pizza_loading.dart';
 import '../widgets/tony_widgets.dart';
 import 'producto_detalle_sheet.dart';
@@ -58,7 +57,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final usuario = context.watch<AuthProvider>().usuario;
-    final carrito = context.watch<CarritoProvider>();
     final nombre = usuario?.nombre.split(' ').first ?? '';
     final recomendados = _productos
         .where((p) => p.variantes.any((v) => v.disponible))
@@ -75,25 +73,36 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Logo + carrito
                     Row(
                       children: [
-                        const TonysLogo(),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text("MammaPizza", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.primary)),
+                            Text("PIZZERÍA", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.dark, letterSpacing: 2)),
+                          ],
+                        ),
                         const Spacer(),
-                        BotonCarrito(carrito: carrito),
                       ],
                     ),
                     const SizedBox(height: 22),
 
                     // Saludo
-                    Text(_saludo(), style: const TextStyle(fontSize: 14, color: AppColors.gray)),
+                    Text(_saludo(),
+                        style: const TextStyle(
+                            fontSize: 14, color: AppColors.gray)),
                     const SizedBox(height: 2),
                     Text(
                       nombre.isEmpty ? "👋" : "$nombre 👋",
-                      style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: AppColors.dark, height: 1.1),
+                      style: const TextStyle(
+                          fontSize: 30,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.dark,
+                          height: 1.1),
                     ),
                     const SizedBox(height: 4),
-                    const Text("¿Qué antojo tienes hoy?", style: TextStyle(fontSize: 14, color: AppColors.gray)),
+                    const Text("¿Qué antojo tienes hoy?",
+                        style: TextStyle(fontSize: 14, color: AppColors.gray)),
                     const SizedBox(height: 16),
 
                     // Buscador
@@ -110,7 +119,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           children: [
                             Icon(Icons.search, color: AppColors.dark, size: 20),
                             SizedBox(width: 10),
-                            Text("Buscar pizzas, bebidas, etc...", style: TextStyle(color: AppColors.gray, fontSize: 14)),
+                            Text("Buscar pizzas, bebidas, etc...",
+                                style: TextStyle(
+                                    color: AppColors.gray, fontSize: 14)),
                           ],
                         ),
                       ),
@@ -145,32 +156,48 @@ class _HomeScreenState extends State<HomeScreen> {
                                   gradient: LinearGradient(
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
-                                    colors: [Color(0xFFF7DDB4), Color(0xFFE9B56E)],
+                                    colors: [
+                                      Color(0xFFF7DDB4),
+                                      Color(0xFFE9B56E)
+                                    ],
                                   ),
                                 ),
-                                child: const Icon(Icons.local_pizza, size: 96, color: AppColors.primary),
+                                child: const Icon(Icons.local_pizza,
+                                    size: 96, color: AppColors.primary),
                               ),
                             ),
                           ),
                           Padding(
-                            padding: const EdgeInsets.all(20),
+                            padding: const EdgeInsets.all(18),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Text("La verdadera", style: TextStyle(color: Colors.white, fontSize: 15)),
+                                const Text("La verdadera",
+                                    style: TextStyle(
+                                        color: Colors.white, fontSize: 15)),
                                 const Text(
                                   "pizza, siempre",
-                                  style: TextStyle(color: Colors.white, fontSize: 23, fontWeight: FontWeight.w800, height: 1.15),
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 23,
+                                      fontWeight: FontWeight.w800,
+                                      height: 1.15),
                                 ),
-                                const Text("es una buena idea", style: TextStyle(color: Colors.white, fontSize: 15)),
+                                const Text("es una buena idea",
+                                    style: TextStyle(
+                                        color: Colors.white, fontSize: 15)),
                                 const SizedBox(height: 8),
-                                Container(width: 64, height: 2, color: AppColors.gold),
+                                Container(
+                                    width: 64,
+                                    height: 2,
+                                    color: AppColors.gold),
                                 const SizedBox(height: 12),
                                 GestureDetector(
                                   onTap: () => widget.onVerMenu("Todas"),
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 8),
                                     decoration: BoxDecoration(
                                       color: Colors.white,
                                       borderRadius: BorderRadius.circular(20),
@@ -178,9 +205,14 @@ class _HomeScreenState extends State<HomeScreen> {
                                     child: const Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Text("Ver menú", style: TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w700)),
+                                        Text("Ver menú",
+                                            style: TextStyle(
+                                                color: AppColors.primary,
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w700)),
                                         SizedBox(width: 6),
-                                        Icon(Icons.arrow_forward, color: AppColors.primary, size: 14),
+                                        Icon(Icons.arrow_forward,
+                                            color: AppColors.primary, size: 14),
                                       ],
                                     ),
                                   ),
@@ -196,15 +228,24 @@ class _HomeScreenState extends State<HomeScreen> {
                     // Categorías
                     Row(
                       children: [
-                        const Text("Categorías", style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: AppColors.dark)),
+                        const Text("Categorías",
+                            style: TextStyle(
+                                fontSize: 19,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.dark)),
                         const Spacer(),
                         GestureDetector(
                           onTap: () => widget.onVerMenu("Todas"),
                           child: const Row(
                             children: [
-                              Text("Ver todas", style: TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w600)),
+                              Text("Ver todas",
+                                  style: TextStyle(
+                                      color: AppColors.primary,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600)),
                               SizedBox(width: 4),
-                              Icon(Icons.arrow_forward, color: AppColors.primary, size: 14),
+                              Icon(Icons.arrow_forward,
+                                  color: AppColors.primary, size: 14),
                             ],
                           ),
                         ),
@@ -214,27 +255,48 @@ class _HomeScreenState extends State<HomeScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _CatItem(icon: Icons.local_pizza, label: "Pizzas", activo: true, onTap: () => widget.onVerMenu("Pizzas")),
-                        _CatItem(icon: Icons.restaurant, label: "Entradas", onTap: () => widget.onVerMenu("Entradas")),
-                        _CatItem(icon: Icons.local_drink, label: "Bebidas", onTap: () => widget.onVerMenu("Bebidas")),
-                        _CatItem(icon: Icons.cake, label: "Postres", onTap: () => widget.onVerMenu("Postres")),
+                        _CatItem(
+                            icon: Icons.local_pizza,
+                            label: "Pizzas",
+                            activo: true,
+                            onTap: () => widget.onVerMenu("Pizzas")),
+                        _CatItem(
+                            icon: Icons.restaurant,
+                            label: "Entradas",
+                            onTap: () => widget.onVerMenu("Entradas")),
+                        _CatItem(
+                            icon: Icons.local_drink,
+                            label: "Bebidas",
+                            onTap: () => widget.onVerMenu("Bebidas")),
+                        _CatItem(
+                            icon: Icons.cake,
+                            label: "Postres",
+                            onTap: () => widget.onVerMenu("Postres")),
                       ],
                     ),
                     const SizedBox(height: 24),
 
                     // Recomendados
-                    const Text("Recomendados para ti", style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: AppColors.dark)),
+                    const Text("Recomendados para ti",
+                        style: TextStyle(
+                            fontSize: 19,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.dark)),
                     const SizedBox(height: 12),
                     if (recomendados.isEmpty)
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 24),
-                        child: Center(child: Text("Pronto tendremos recomendaciones para ti", style: TextStyle(color: AppColors.gray))),
+                        child: Center(
+                            child: Text(
+                                "Pronto tendremos recomendaciones para ti",
+                                style: TextStyle(color: AppColors.gray))),
                       )
                     else
                       ...recomendados.map(
                         (p) => TarjetaProducto(
                           producto: p,
-                          onTap: () => mostrarDetalleProducto(context, p, _agregados),
+                          onTap: () =>
+                              mostrarDetalleProducto(context, p, _agregados),
                         ),
                       ),
                   ],
@@ -250,7 +312,11 @@ class _CatItem extends StatelessWidget {
   final String label;
   final bool activo;
   final VoidCallback onTap;
-  const _CatItem({required this.icon, required this.label, required this.onTap, this.activo = false});
+  const _CatItem(
+      {required this.icon,
+      required this.label,
+      required this.onTap,
+      this.activo = false});
 
   @override
   Widget build(BuildContext context) {
@@ -262,7 +328,9 @@ class _CatItem extends StatelessWidget {
             width: 72,
             height: 72,
             decoration: BoxDecoration(
-              color: activo ? AppColors.primary : Colors.white.withValues(alpha: 0.8),
+              color: activo
+                  ? AppColors.primary
+                  : Colors.white.withValues(alpha: 0.8),
               borderRadius: BorderRadius.circular(18),
               boxShadow: [
                 BoxShadow(
@@ -272,7 +340,8 @@ class _CatItem extends StatelessWidget {
                 ),
               ],
             ),
-            child: Icon(icon, color: activo ? Colors.white : AppColors.primary, size: 30),
+            child: Icon(icon,
+                color: activo ? Colors.white : AppColors.primary, size: 30),
           ),
           const SizedBox(height: 8),
           Text(

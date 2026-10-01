@@ -1,15 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../core/theme.dart';
-import '../core/page_transitions.dart';
 import '../models/producto.dart';
 import '../models/agregado.dart';
 import '../services/productos_service.dart';
-import '../providers/carrito_provider.dart';
 import '../widgets/pizza_loading.dart';
 import '../widgets/tony_widgets.dart';
 import 'producto_detalle_sheet.dart';
-import 'carrito_screen.dart';
 
 class MenuScreen extends StatefulWidget {
   final ValueNotifier<String>? categoria;
@@ -82,7 +78,8 @@ class _MenuScreenState extends State<MenuScreen> {
     return TarjetaProducto(
       producto: p,
       agotado: agotado,
-      onTap: agotado ? null : () => mostrarDetalleProducto(context, p, _agregados),
+      onTap:
+          agotado ? null : () => mostrarDetalleProducto(context, p, _agregados),
     );
   }
 
@@ -95,7 +92,11 @@ class _MenuScreenState extends State<MenuScreen> {
             icon: const Icon(Icons.arrow_back, color: AppColors.dark),
             onPressed: widget.onVolver,
           ),
-          const Text("Menú", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.dark)),
+          const Text("Menú",
+              style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.dark)),
           const Spacer(),
           GestureDetector(
             onTap: () => setState(() {
@@ -109,10 +110,14 @@ class _MenuScreenState extends State<MenuScreen> {
                 color: Colors.white,
                 shape: BoxShape.circle,
                 boxShadow: [
-                  BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 2)),
+                  BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.06),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2)),
                 ],
               ),
-              child: Icon(_buscando ? Icons.close : Icons.search, color: AppColors.primary, size: 22),
+              child: Icon(_buscando ? Icons.close : Icons.search,
+                  color: AppColors.primary, size: 22),
             ),
           ),
         ],
@@ -139,7 +144,9 @@ class _MenuScreenState extends State<MenuScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
               decoration: BoxDecoration(
-                color: activo ? AppColors.primary : Colors.white.withValues(alpha: 0.8),
+                color: activo
+                    ? AppColors.primary
+                    : Colors.white.withValues(alpha: 0.8),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
@@ -159,8 +166,10 @@ class _MenuScreenState extends State<MenuScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final carrito = context.watch<CarritoProvider>();
-    final categorias = ["Todas", ...{for (final p in _productos) p.categoriaNombre}];
+    final categorias = [
+      "Todas",
+      ...{for (final p in _productos) p.categoriaNombre}
+    ];
 
     String seleccion = _sel;
     if (_sel != "Todas") {
@@ -173,25 +182,32 @@ class _MenuScreenState extends State<MenuScreen> {
     }
 
     final filtrados = _productos.where((p) {
-      final okCat = seleccion == "Todas" || _coincide(p.categoriaNombre, seleccion);
-      final okBusqueda = _consulta.isEmpty || p.nombre.toLowerCase().contains(_consulta.toLowerCase());
+      final okCat =
+          seleccion == "Todas" || _coincide(p.categoriaNombre, seleccion);
+      final okBusqueda = _consulta.isEmpty ||
+          p.nombre.toLowerCase().contains(_consulta.toLowerCase());
       return okCat && okBusqueda;
     }).toList();
 
     Widget cuerpo;
     if (_cargando) {
-      cuerpo = const Expanded(child: Center(child: PizzaLoading(mensaje: "Cargando menú...")));
+      cuerpo = const Expanded(
+          child: Center(child: PizzaLoading(mensaje: "Cargando menú...")));
     } else if (_error != null) {
       cuerpo = Expanded(
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 64, color: AppColors.danger),
+              const Icon(Icons.error_outline,
+                  size: 64, color: AppColors.danger),
               const SizedBox(height: 16),
-              Text(_error!, style: const TextStyle(color: AppColors.danger, fontSize: 16)),
+              Text(_error!,
+                  style:
+                      const TextStyle(color: AppColors.danger, fontSize: 16)),
               const SizedBox(height: 12),
-              ElevatedButton(onPressed: _cargarMenu, child: const Text("Reintentar")),
+              ElevatedButton(
+                  onPressed: _cargarMenu, child: const Text("Reintentar")),
             ],
           ),
         ),
@@ -201,7 +217,9 @@ class _MenuScreenState extends State<MenuScreen> {
       if (filtrados.isEmpty) {
         lista.add(const Padding(
           padding: EdgeInsets.symmetric(vertical: 48),
-          child: Center(child: Text("Aún no hay productos aquí", style: TextStyle(color: AppColors.gray))),
+          child: Center(
+              child: Text("Aún no hay productos aquí",
+                  style: TextStyle(color: AppColors.gray))),
         ));
       } else {
         final grupos = <String, List<Producto>>{};
@@ -247,8 +265,6 @@ class _MenuScreenState extends State<MenuScreen> {
       );
     }
 
-    final mostrarBarra = !_cargando && _error == null && carrito.items.isNotEmpty;
-
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: SafeArea(
@@ -257,8 +273,6 @@ class _MenuScreenState extends State<MenuScreen> {
             Positioned.fill(
               child: Column(children: [_cabecera(), cuerpo]),
             ),
-            if (mostrarBarra)
-              Positioned(left: 16, right: 16, bottom: 12, child: _BarraCarrito(carrito: carrito)),
           ],
         ),
       ),
@@ -281,52 +295,16 @@ class _Seccion extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(nombre, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.dark)),
-              const Text("Las más pedidas", style: TextStyle(fontSize: 12, color: AppColors.gray)),
+              Text(nombre,
+                  style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.dark)),
+              const Text("Las más pedidas",
+                  style: TextStyle(fontSize: 12, color: AppColors.gray)),
             ],
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _BarraCarrito extends StatelessWidget {
-  final CarritoProvider carrito;
-  const _BarraCarrito({required this.carrito});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => Navigator.of(context).push(deslizarDesdeDerecha(const CarritoScreen())),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-        decoration: BoxDecoration(
-          color: AppColors.primary,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(color: AppColors.primary.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4)),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 28,
-              height: 28,
-              alignment: Alignment.center,
-              decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-              child: Text("${carrito.cantidadItems}",
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary)),
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Text("Ver mi pedido",
-                  style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
-            ),
-            Text("S/. ${carrito.total.toStringAsFixed(2)}",
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-          ],
-        ),
       ),
     );
   }

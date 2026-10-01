@@ -16,7 +16,7 @@ IconData iconoCategoria(String nombre) {
   return Icons.restaurant_menu;
 }
 
-/// Logo "Tony's PIZZA HOUSE"
+/// Logo "MammaPizza PIZZA HOUSE"
 class TonysLogo extends StatelessWidget {
   const TonysLogo({super.key});
 
@@ -32,7 +32,7 @@ class TonysLogo extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              "Tony's",
+              "MammaPizza",
               style: GoogleFonts.poppins(
                 fontSize: 30,
                 fontWeight: FontWeight.w800,

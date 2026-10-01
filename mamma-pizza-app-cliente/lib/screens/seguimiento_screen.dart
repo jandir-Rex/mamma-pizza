@@ -4,6 +4,7 @@ import '../models/pedido.dart';
 import '../services/pedidos_service.dart';
 import '../services/socket_service.dart';
 import '../widgets/pizza_loading.dart';
+import '../widgets/seguimiento_widgets.dart';
 
 class SeguimientoScreen extends StatefulWidget {
   final int pedidoId;
@@ -16,9 +17,6 @@ class SeguimientoScreen extends StatefulWidget {
 class _SeguimientoScreenState extends State<SeguimientoScreen> {
   Pedido? _pedido;
   bool _cargando = true;
-
-  static const _pasosDelivery = ["CONFIRMADO", "EN_PREPARACION", "EN_CAMINO", "ENTREGADO"];
-  static const _pasosSalon = ["CONFIRMADO", "EN_PREPARACION", "ENTREGADO"];
 
   @override
   void initState() {
@@ -51,85 +49,40 @@ class _SeguimientoScreenState extends State<SeguimientoScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pasos = _pedido?.canal == "DELIVERY" ? _pasosDelivery : _pasosSalon;
-    final indiceActual = _pedido == null ? -1 : pasos.indexOf(_pedido!.estado);
-
     return Scaffold(
-      appBar: AppBar(title: Text(_pedido != null ? _pedido!.codigo : "Seguimiento")),
-      body: _cargando
+      backgroundColor: AppColors.bg,
+      appBar: AppBar(
+        title: const Text("Mi pedido", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+        actions: [
+          if (_pedido != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 20),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFE6DA),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text("#${_pedido!.codigo}",
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.gray)),
+                ),
+              ),
+            ),
+        ],
+      ),
+      body: _cargando && _pedido == null
           ? const Center(child: PizzaLoading(mensaje: "Cargando tu pedido..."))
           : _pedido == null
               ? const Center(child: Text("No se pudo cargar el pedido"))
-              : Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _pedido!.estado == "CANCELADO" ? "Pedido cancelado" : "¡Vamos por buen camino! 🍕",
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.dark),
-                      ),
-                      const SizedBox(height: 24),
-                      if (_pedido!.estado == "CANCELADO")
-                        const Text("Este pedido fue cancelado.", style: TextStyle(color: AppColors.danger))
-                      else
-                        ...List.generate(pasos.length, (i) {
-                          return _PasoTimeline(
-                            titulo: EstadoPedidoUI.etiqueta(pasos[i]),
-                            completado: i <= indiceActual,
-                            esActual: i == indiceActual,
-                            esUltimo: i == pasos.length - 1,
-                          );
-                        }),
-                    ],
+              : RefreshIndicator(
+                  onRefresh: _cargar,
+                  color: AppColors.primary,
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+                    children: [SeguimientoPedido(pedido: _pedido!)],
                   ),
                 ),
-    );
-  }
-}
-
-class _PasoTimeline extends StatelessWidget {
-  final String titulo;
-  final bool completado;
-  final bool esActual;
-  final bool esUltimo;
-  const _PasoTimeline({required this.titulo, required this.completado, required this.esActual, required this.esUltimo});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = completado ? AppColors.success : AppColors.gray.withValues(alpha: 0.35);
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Column(
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                width: esActual ? 26 : 20,
-                height: esActual ? 26 : 20,
-                decoration:
-                    BoxDecoration(color: completado ? color : Colors.white, shape: BoxShape.circle, border: Border.all(color: color, width: 2)),
-                child: completado ? const Icon(Icons.check, size: 14, color: Colors.white) : null,
-              ),
-              if (!esUltimo)
-                Expanded(child: Container(width: 2, color: color, margin: const EdgeInsets.symmetric(vertical: 2))),
-            ],
-          ),
-          const SizedBox(width: 14),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 28, top: 2),
-            child: Text(
-              titulo,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: esActual ? FontWeight.w700 : FontWeight.w500,
-                color: completado ? AppColors.dark : AppColors.gray,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

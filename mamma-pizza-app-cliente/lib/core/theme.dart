@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
-  // Colores mejorados tipo Tony's Pizza House
+  // Colores mejorados tipo MammaPizza
   static const primary = Color(0xFFC41E24);
   static const primaryLight = Color(0xFFE8454A);
   static const dark = Color(0xFF2D2420);
