@@ -5,14 +5,16 @@ import '../core/page_transitions.dart';
 import '../models/producto.dart';
 import '../models/agregado.dart';
 import '../services/productos_service.dart';
-import '../providers/auth_provider.dart';
 import '../providers/carrito_provider.dart';
 import '../widgets/pizza_loading.dart';
+import '../widgets/tony_widgets.dart';
 import 'producto_detalle_sheet.dart';
 import 'carrito_screen.dart';
 
 class MenuScreen extends StatefulWidget {
-  const MenuScreen({super.key});
+  final ValueNotifier<String>? categoria;
+  final VoidCallback? onVolver;
+  const MenuScreen({super.key, this.categoria, this.onVolver});
 
   @override
   State<MenuScreen> createState() => _MenuScreenState();
@@ -23,12 +25,27 @@ class _MenuScreenState extends State<MenuScreen> {
   List<Agregado> _agregados = [];
   bool _cargando = true;
   String? _error;
-  String _categoriaSeleccionada = "Todas";
+  String _sel = "Todas";
+  bool _buscando = false;
+  String _consulta = "";
 
   @override
   void initState() {
     super.initState();
+    _sel = widget.categoria?.value ?? "Todas";
+    widget.categoria?.addListener(_alCambiarCategoria);
     _cargarMenu();
+  }
+
+  @override
+  void dispose() {
+    widget.categoria?.removeListener(_alCambiarCategoria);
+    super.dispose();
+  }
+
+  void _alCambiarCategoria() {
+    final v = widget.categoria?.value;
+    if (v != null && mounted && v != _sel) setState(() => _sel = v);
   }
 
   Future<void> _cargarMenu() async {
@@ -49,223 +66,266 @@ class _MenuScreenState extends State<MenuScreen> {
       if (!mounted) return;
       setState(() => _error = "No se pudo cargar el menú");
     } finally {
-      if (!mounted) return;
-      setState(() => _cargando = false);
+      if (mounted) setState(() => _cargando = false);
     }
+  }
+
+  bool _coincide(String a, String b) {
+    final x = a.toLowerCase().trim();
+    final y = b.toLowerCase().trim();
+    if (x.isEmpty || y.isEmpty) return false;
+    return x == y || x.startsWith(y) || y.startsWith(x);
+  }
+
+  Widget _tarjeta(Producto p) {
+    final agotado = p.variantes.every((v) => !v.disponible);
+    return TarjetaProducto(
+      producto: p,
+      agotado: agotado,
+      onTap: agotado ? null : () => mostrarDetalleProducto(context, p, _agregados),
+    );
+  }
+
+  Widget _cabecera() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 20, 4),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back, color: AppColors.dark),
+            onPressed: widget.onVolver,
+          ),
+          const Text("Menú", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.dark)),
+          const Spacer(),
+          GestureDetector(
+            onTap: () => setState(() {
+              _buscando = !_buscando;
+              if (!_buscando) _consulta = "";
+            }),
+            child: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 2)),
+                ],
+              ),
+              child: Icon(_buscando ? Icons.close : Icons.search, color: AppColors.primary, size: 22),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _chips(List<String> categorias, String seleccion) {
+    return SizedBox(
+      height: 46,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+        itemCount: categorias.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final cat = categorias[i];
+          final activo = cat == seleccion;
+          return GestureDetector(
+            onTap: () {
+              setState(() => _sel = cat);
+              widget.categoria?.value = cat;
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
+              decoration: BoxDecoration(
+                color: activo ? AppColors.primary : Colors.white.withValues(alpha: 0.8),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                cat,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: activo ? FontWeight.w700 : FontWeight.w500,
+                  color: activo ? Colors.white : AppColors.dark,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final usuario = context.watch<AuthProvider>().usuario;
     final carrito = context.watch<CarritoProvider>();
-
     final categorias = ["Todas", ...{for (final p in _productos) p.categoriaNombre}];
-    final productosFiltrados = _categoriaSeleccionada == "Todas"
-        ? _productos
-        : _productos.where((p) => p.categoriaNombre == _categoriaSeleccionada).toList();
+
+    String seleccion = _sel;
+    if (_sel != "Todas") {
+      for (final c in categorias) {
+        if (_coincide(c, _sel)) {
+          seleccion = c;
+          break;
+        }
+      }
+    }
+
+    final filtrados = _productos.where((p) {
+      final okCat = seleccion == "Todas" || _coincide(p.categoriaNombre, seleccion);
+      final okBusqueda = _consulta.isEmpty || p.nombre.toLowerCase().contains(_consulta.toLowerCase());
+      return okCat && okBusqueda;
+    }).toList();
+
+    Widget cuerpo;
+    if (_cargando) {
+      cuerpo = const Expanded(child: Center(child: PizzaLoading(mensaje: "Cargando menú...")));
+    } else if (_error != null) {
+      cuerpo = Expanded(
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 64, color: AppColors.danger),
+              const SizedBox(height: 16),
+              Text(_error!, style: const TextStyle(color: AppColors.danger, fontSize: 16)),
+              const SizedBox(height: 12),
+              ElevatedButton(onPressed: _cargarMenu, child: const Text("Reintentar")),
+            ],
+          ),
+        ),
+      );
+    } else {
+      final lista = <Widget>[];
+      if (filtrados.isEmpty) {
+        lista.add(const Padding(
+          padding: EdgeInsets.symmetric(vertical: 48),
+          child: Center(child: Text("Aún no hay productos aquí", style: TextStyle(color: AppColors.gray))),
+        ));
+      } else {
+        final grupos = <String, List<Producto>>{};
+        for (final p in filtrados) {
+          grupos.putIfAbsent(p.categoriaNombre, () => []).add(p);
+        }
+        grupos.forEach((cat, items) {
+          lista.add(_Seccion(nombre: cat));
+          for (final p in items) {
+            lista.add(_tarjeta(p));
+          }
+        });
+      }
+
+      cuerpo = Expanded(
+        child: Column(
+          children: [
+            _chips(categorias, seleccion),
+            if (_buscando)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+                child: TextField(
+                  autofocus: true,
+                  onChanged: (v) => setState(() => _consulta = v.trim()),
+                  decoration: const InputDecoration(
+                    hintText: "Buscar pizzas, bebidas, etc...",
+                    prefixIcon: Icon(Icons.search, size: 20),
+                  ),
+                ),
+              ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _cargarMenu,
+                color: AppColors.primary,
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(20, 6, 20, 110),
+                  children: lista,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final mostrarBarra = !_cargando && _error == null && carrito.items.isNotEmpty;
 
     return Scaffold(
+      backgroundColor: AppColors.bg,
       body: SafeArea(
-        child: _cargando
-            ? const Center(child: PizzaLoading(mensaje: "Preparando el menú..."))
-            : _error != null
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(_error!, style: const TextStyle(color: AppColors.danger)),
-                        const SizedBox(height: 12),
-                        TextButton(onPressed: _cargarMenu, child: const Text("Reintentar")),
-                      ],
-                    ),
-                  )
-                : RefreshIndicator(
-                    onRefresh: _cargarMenu,
-                    color: AppColors.primary,
-                    child: CustomScrollView(
-                      slivers: [
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text("¡Hola, ${usuario?.nombre.split(' ').first ?? ''}! 👋",
-                                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.dark)),
-                                      const Text("¿Qué se te antoja hoy?",
-                                          style: TextStyle(color: AppColors.gray, fontSize: 13)),
-                                    ],
-                                  ),
-                                ),
-                                _BotonCarrito(carrito: carrito),
-                              ],
-                            ),
-                          ),
-                        ),
-                        SliverToBoxAdapter(
-                          child: SizedBox(
-                            height: 46,
-                            child: ListView(
-                              scrollDirection: Axis.horizontal,
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                              children: categorias.map((cat) {
-                                final activo = cat == _categoriaSeleccionada;
-                                return Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: ChoiceChip(
-                                    label: Text(cat),
-                                    selected: activo,
-                                    onSelected: (_) => setState(() => _categoriaSeleccionada = cat),
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                          ),
-                        ),
-                        SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
-                          sliver: SliverList(
-                            delegate: SliverChildBuilderDelegate(
-                              (context, index) {
-                                final producto = productosFiltrados[index];
-                                final agotado = producto.variantes.every((v) => !v.disponible);
-                                return _TarjetaProducto(
-                                  producto: producto,
-                                  agotado: agotado,
-                                  onTap: agotado ? null : () => mostrarDetalleProducto(context, producto, _agregados),
-                                );
-                              },
-                              childCount: productosFiltrados.length,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: Column(children: [_cabecera(), cuerpo]),
+            ),
+            if (mostrarBarra)
+              Positioned(left: 16, right: 16, bottom: 12, child: _BarraCarrito(carrito: carrito)),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _BotonCarrito extends StatelessWidget {
-  final CarritoProvider carrito;
-  const _BotonCarrito({required this.carrito});
+class _Seccion extends StatelessWidget {
+  final String nombre;
+  const _Seccion({required this.nombre});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => Navigator.of(context).push(deslizarDesdeDerecha(const CarritoScreen())),
-      child: Stack(
-        clipBehavior: Clip.none,
+    return Padding(
+      padding: const EdgeInsets.only(top: 14, bottom: 12),
+      child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2)),
-            ]),
-            child: const Icon(Icons.shopping_bag_outlined, color: AppColors.primary),
+          Icon(iconoCategoria(nombre), color: AppColors.primary, size: 28),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(nombre, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.dark)),
+              const Text("Las más pedidas", style: TextStyle(fontSize: 12, color: AppColors.gray)),
+            ],
           ),
-          if (carrito.cantidadItems > 0)
-            Positioned(
-              right: -4,
-              top: -4,
-              child: AnimatedScale(
-                scale: 1,
-                duration: const Duration(milliseconds: 200),
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(color: AppColors.warning, shape: BoxShape.circle),
-                  constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                  child: Text("${carrito.cantidadItems}",
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold)),
-                ),
-              ),
-            ),
         ],
       ),
     );
   }
 }
 
-class _TarjetaProducto extends StatelessWidget {
-  final Producto producto;
-  final bool agotado;
-  final VoidCallback? onTap;
-  const _TarjetaProducto({required this.producto, required this.agotado, required this.onTap});
+class _BarraCarrito extends StatelessWidget {
+  final CarritoProvider carrito;
+  const _BarraCarrito({required this.carrito});
 
   @override
   Widget build(BuildContext context) {
-    return Opacity(
-      opacity: agotado ? 0.5 : 1,
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(deslizarDesdeDerecha(const CarritoScreen())),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 12, offset: const Offset(0, 4))],
+          color: AppColors.primary,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(color: AppColors.primary.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4)),
+          ],
         ),
-        child: Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(18),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(18),
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Row(
-                children: [
-                  Container(
-                    width: 68,
-                    height: 68,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [AppColors.primary, AppColors.primaryLight],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Center(child: Text("🍕", style: TextStyle(fontSize: 30))),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(producto.nombre,
-                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.dark)),
-                        const SizedBox(height: 3),
-                        Text(
-                          agotado ? "Agotado por hoy" : (producto.descripcion ?? ""),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: agotado ? AppColors.danger : AppColors.gray,
-                            fontSize: 12.5,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        if (!agotado)
-                          Text("Desde S/. ${producto.precioDesde.toStringAsFixed(2)}",
-                              style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 13)),
-                      ],
-                    ),
-                  ),
-                  if (!agotado)
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
-                      child: const Icon(Icons.add, color: Colors.white, size: 18),
-                    ),
-                ],
-              ),
+        child: Row(
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+              child: Text("${carrito.cantidadItems}",
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.primary)),
             ),
-          ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text("Ver mi pedido",
+                  style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+            ),
+            Text("S/. ${carrito.total.toStringAsFixed(2)}",
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+          ],
         ),
       ),
     );

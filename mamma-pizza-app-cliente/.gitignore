@@ -43,3 +43,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+.DS_Store
+*.zip
+*.sh
+backups_design/
+backups_design_v2/
+*.bak
+.env

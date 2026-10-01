@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/theme.dart';
+import 'home_screen.dart';
 import 'menu_screen.dart';
 import 'pedidos_historial_screen.dart';
 import 'perfil_screen.dart';
@@ -13,18 +14,34 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _indice = 0;
+  final ValueNotifier<String> _categoria = ValueNotifier<String>("Todas");
 
-  final _pantallas = const [
-    MenuScreen(),
-    PedidosHistorialScreen(),
-    PerfilScreen(),
+  void _irAMenu([String categoria = "Todas"]) {
+    _categoria.value = categoria;
+    setState(() => _indice = 1);
+  }
+
+  void _irAInicio() => setState(() => _indice = 0);
+
+  late final List<Widget> _pantallas = [
+    HomeScreen(onVerMenu: _irAMenu),
+    MenuScreen(categoria: _categoria, onVolver: _irAInicio),
+    const PedidosHistorialScreen(),
+    const PerfilScreen(),
   ];
 
   final _items = const [
+    (icono: Icons.home_outlined, iconoActivo: Icons.home, texto: "Inicio"),
     (icono: Icons.local_pizza_outlined, iconoActivo: Icons.local_pizza, texto: "Menú"),
     (icono: Icons.receipt_long_outlined, iconoActivo: Icons.receipt_long, texto: "Pedidos"),
     (icono: Icons.person_outline, iconoActivo: Icons.person, texto: "Perfil"),
   ];
+
+  @override
+  void dispose() {
+    _categoria.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,47 +49,41 @@ class _MainShellState extends State<MainShell> {
       body: IndexedStack(index: _indice, children: _pantallas),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 14, offset: const Offset(0, -3))],
+          color: const Color(0xFFFFFBF5),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 16,
+              offset: const Offset(0, -4),
+            ),
+          ],
         ),
         child: SafeArea(
+          top: false,
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+            padding: const EdgeInsets.only(top: 10, bottom: 6),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: List.generate(_items.length, (i) {
                 final activo = i == _indice;
                 final item = _items[i];
-                return GestureDetector(
-                  onTap: () => setState(() => _indice = i),
-                  behavior: HitTestBehavior.opaque,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOut,
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: activo ? AppColors.primary.withOpacity(0.1) : Colors.transparent,
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    child: Row(
+                final color = activo ? AppColors.primary : AppColors.gray;
+                return Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => setState(() => _indice = i),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          activo ? item.iconoActivo : item.icono,
-                          color: activo ? AppColors.primary : AppColors.gray,
-                          size: 24,
-                        ),
-                        AnimatedSize(
-                          duration: const Duration(milliseconds: 200),
-                          child: activo
-                              ? Padding(
-                                  padding: const EdgeInsets.only(left: 6),
-                                  child: Text(
-                                    item.texto,
-                                    style: const TextStyle(
-                                        color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 13),
-                                  ),
-                                )
-                              : const SizedBox.shrink(),
+                        Icon(activo ? item.iconoActivo : item.icono, color: color, size: 26),
+                        const SizedBox(height: 4),
+                        Text(
+                          item.texto,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: activo ? FontWeight.w700 : FontWeight.w400,
+                            color: color,
+                          ),
                         ),
                       ],
                     ),
