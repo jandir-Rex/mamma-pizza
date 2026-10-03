@@ -1,0 +1,276 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ------------------- ENUMS -------------------
+
+enum RolUsuario {
+  CLIENTE
+  ADMIN
+  REPARTIDOR
+  MOZO
+  PERSONALIZADO
+}
+
+enum EstadoPedido {
+  PENDIENTE_PAGO
+  CONFIRMADO
+  EN_PREPARACION
+  EN_CAMINO
+  ENTREGADO
+  CANCELADO
+}
+
+enum CanalPedido {
+  DELIVERY
+  SALON
+}
+
+enum MetodoPago {
+  YAPE
+  EFECTIVO
+  TARJETA
+}
+
+enum PasarelaPago {
+  CULQI
+  IZIPAY
+}
+
+enum AreaPreparacion {
+  HORNO
+  BARRA
+}
+
+// ------------------- USUARIOS -------------------
+model Usuario {
+  id           Int        @id @default(autoincrement())
+  nombre       String
+  email        String     @unique
+  passwordHash String
+  telefono     String?
+  dni          String?
+  direccion    String?
+  ciudad       String?
+  rol          RolUsuario @default(CLIENTE)
+  permisos     String[]   @default([])
+  createdAt    DateTime   @default(now())
+
+  direcciones      Direccion[]
+  pedidos          Pedido[]         @relation("PedidosCliente")
+  pedidosAtendidos Pedido[]         @relation("PedidosAtendidosPorStaff") // 👈 AGREGAR ESTA LÍNEA
+  atencionesPedido PedidoAtencion[]
+  repartidor       Repartidor?
+
+  @@map("usuarios")
+}
+
+model Direccion {
+  id         Int     @id @default(autoincrement())
+  usuarioId  Int
+  usuario    Usuario @relation(fields: [usuarioId], references: [id])
+  zona       String
+  referencia String?
+  lat        Float
+  lng        Float
+
+  pedidos Pedido[]
+
+  @@map("direcciones")
+}
+
+model Repartidor {
+  id               Int     @id @default(autoincrement())
+  usuarioId        Int     @unique
+  usuario          Usuario @relation(fields: [usuarioId], references: [id])
+  vehiculo         String?
+  disponible       Boolean @default(true)
+  capacidadPedidos Int     @default(2)
+  latActual        Float?
+  lngActual        Float?
+
+  pedidos Pedido[]
+
+  @@map("repartidores")
+}
+
+// ------------------- CATÁLOGO -------------------
+
+model Categoria {
+  id              Int              @id @default(autoincrement())
+  nombre          String           @unique
+  parentId        Int?
+  areaPreparacion AreaPreparacion?
+  padre           Categoria?       @relation("CategoriaJerarquia", fields: [parentId], references: [id], onDelete: Restrict)
+  hijas           Categoria[]      @relation("CategoriaJerarquia")
+
+  productos Producto[]
+
+  @@index([parentId])
+  @@map("categorias")
+}
+
+model Producto {
+  id          Int       @id @default(autoincrement())
+  nombre      String
+  descripcion String?
+  categoriaId Int
+  categoria   Categoria @relation(fields: [categoriaId], references: [id])
+  imagenUrl   String?
+  disponible  Boolean   @default(true)
+
+  variantes ProductoVariante[]
+
+  @@map("productos")
+}
+
+model ProductoVariante {
+  id         Int      @id @default(autoincrement())
+  productoId Int
+  producto   Producto @relation(fields: [productoId], references: [id])
+  tamano     String
+  precio     Decimal  @db.Decimal(10, 2)
+  disponible Boolean  @default(true)
+
+  pedidoItems    PedidoItem[]
+  disponibilidad DisponibilidadDiaria[]
+
+  @@map("producto_variantes")
+}
+
+model DisponibilidadDiaria {
+  id                 Int              @id @default(autoincrement())
+  productoVarianteId Int
+  productoVariante   ProductoVariante @relation(fields: [productoVarianteId], references: [id])
+  fecha              DateTime         @db.Date
+  stockMaximo        Int
+  stockDisponible    Int
+
+  @@unique([productoVarianteId, fecha])
+  @@map("disponibilidad_diaria")
+}
+
+// ------------------- MESAS -------------------
+
+model Mesa {
+  id        Int  @id @default(autoincrement())
+  numero    Int  @unique
+  capacidad Int?
+
+  pedidos Pedido[]
+
+  @@map("mesas")
+}
+
+// ------------------- PEDIDOS -------------------
+
+model Pedido {
+  id            Int          @id @default(autoincrement())
+  codigo        String       @unique
+  clienteId     Int
+  cliente       Usuario      @relation("PedidosCliente", fields: [clienteId], references: [id])
+  atendidoPorId Int? // 👈 AGREGAR
+  atendidoPor   Usuario?     @relation("PedidosAtendidosPorStaff", fields: [atendidoPorId], references: [id]) // 👈 AGREGAR
+  clienteNombre String?
+  canal         CanalPedido
+  estado        EstadoPedido @default(PENDIENTE_PAGO)
+  direccionId   Int?
+  direccion     Direccion?   @relation(fields: [direccionId], references: [id])
+  mesaId        Int?
+  mesa          Mesa?        @relation(fields: [mesaId], references: [id])
+  repartidorId  Int?
+  repartidor    Repartidor?  @relation(fields: [repartidorId], references: [id])
+  subtotal      Decimal      @db.Decimal(10, 2)
+  total         Decimal      @db.Decimal(10, 2)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  items             PedidoItem[]
+  pago              Pago?
+  historialAtencion PedidoAtencion[]
+
+  @@map("pedidos")
+}
+
+model PedidoAtencion {
+  id            Int        @id @default(autoincrement())
+  pedidoId      Int
+  pedido        Pedido     @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  usuarioId     Int?
+  usuario       Usuario?   @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  usuarioNombre String
+  usuarioRol    RolUsuario
+  accion        String
+  createdAt     DateTime   @default(now())
+
+  @@index([pedidoId, createdAt])
+  @@map("pedido_atenciones")
+}
+
+model PedidoItem {
+  id                 Int                  @id @default(autoincrement())
+  pedidoId           Int
+  pedido             Pedido               @relation(fields: [pedidoId], references: [id])
+  productoVarianteId Int
+  productoVariante   ProductoVariante     @relation(fields: [productoVarianteId], references: [id])
+  cantidad           Int
+  precioUnitario     Decimal              @db.Decimal(10, 2)
+  notas              String?
+  agregados          PedidoItemAgregado[]
+
+  @@map("pedido_items")
+}
+
+model Pago {
+  id            Int           @id @default(autoincrement())
+  pedidoId      Int           @unique
+  pedido        Pedido        @relation(fields: [pedidoId], references: [id])
+  pasarela      PasarelaPago?
+  metodo        MetodoPago
+  monto         Decimal       @db.Decimal(10, 2)
+  estado        String        @default("pendiente")
+  transactionId String?
+  createdAt     DateTime      @default(now())
+
+  @@map("pagos")
+}
+
+model Agregado {
+  id         Int     @id @default(autoincrement())
+  nombre     String  @unique
+  disponible Boolean @default(true)
+
+  precios             AgregadoPrecio[]
+  pedidoItemAgregados PedidoItemAgregado[]
+
+  @@map("agregados")
+}
+
+model AgregadoPrecio {
+  id         Int      @id @default(autoincrement())
+  agregadoId Int
+  agregado   Agregado @relation(fields: [agregadoId], references: [id])
+  tamano     String
+  precio     Decimal  @db.Decimal(10, 2)
+
+  @@unique([agregadoId, tamano])
+  @@map("agregado_precios")
+}
+
+model PedidoItemAgregado {
+  id             Int        @id @default(autoincrement())
+  pedidoItemId   Int
+  pedidoItem     PedidoItem @relation(fields: [pedidoItemId], references: [id])
+  agregadoId     Int
+  agregado       Agregado   @relation(fields: [agregadoId], references: [id])
+  precioUnitario Decimal    @db.Decimal(10, 2)
+
+  @@map("pedido_item_agregados")
+}

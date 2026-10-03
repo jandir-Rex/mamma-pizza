@@ -1,0 +1,7 @@
+#C:\5to Ciclo - Tecsup\Proyecto Integrador - Pizza\mamma-pizza-limpio\Pikza-pizza-backend\.gitignore
+
+node_modules
+# Keep environment variables out of version control
+.env
+
+/generated/prisma
