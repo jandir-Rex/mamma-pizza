@@ -3,6 +3,7 @@ import '../core/theme.dart';
 import '../models/direccion.dart';
 import '../services/direcciones_service.dart';
 import '../widgets/pizza_loading.dart';
+import 'seleccionar_ubicacion_screen.dart';
 
 class DireccionesScreen extends StatefulWidget {
   const DireccionesScreen({super.key});
@@ -35,40 +36,10 @@ class _DireccionesScreenState extends State<DireccionesScreen> {
   }
 
   Future<void> _agregar() async {
-    final zonaCtrl = TextEditingController();
-    final refCtrl = TextEditingController();
-
-    final guardar = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text("Nueva dirección", style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 16),
-            TextField(controller: zonaCtrl, decoration: const InputDecoration(labelText: "Zona / Dirección")),
-            const SizedBox(height: 12),
-            TextField(controller: refCtrl, decoration: const InputDecoration(labelText: "Referencia (opcional)")),
-            const SizedBox(height: 16),
-            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Guardar dirección")),
-          ],
-        ),
-      ),
+    final nueva = await Navigator.of(context).push<Direccion>(
+      MaterialPageRoute<Direccion>(builder: (_) => const SeleccionarUbicacionScreen()),
     );
-
-    if (guardar == true && zonaCtrl.text.trim().isNotEmpty) {
-      try {
-        await DireccionesService.crear(zona: zonaCtrl.text.trim(), referencia: refCtrl.text.trim(), lat: -8.1116, lng: -79.0287);
-        _cargar();
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst("Exception: ", ""))));
-      }
-    }
+    if (nueva != null) _cargar();
   }
 
   Future<void> _eliminar(Direccion d) async {
@@ -141,7 +112,7 @@ class _DireccionesScreenState extends State<DireccionesScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _agregar,
         backgroundColor: AppColors.primary,
-        icon: const Icon(Icons.add),
+        icon: const Icon(Icons.add_location_alt_outlined),
         label: const Text("Agregar"),
       ),
     );

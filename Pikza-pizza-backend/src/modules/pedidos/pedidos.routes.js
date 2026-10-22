@@ -13,6 +13,12 @@ function permitirClienteOPermisoPedido(req, res, next) {
   return permitirPermisos("pedidos:crear")(req, res, next);
 }
 
+// El repartidor pasa directo; admin/personalizado necesitan reparto:gestion
+function permitirRepartidorOGestionReparto(req, res, next) {
+  if (req.usuario.rol === "REPARTIDOR") return next();
+  return permitirPermisos("reparto:gestion")(req, res, next);
+}
+
 // Creación y agregación de items
 router.post("/", permitirRoles("CLIENTE", "ADMIN", "MOZO", "PERSONALIZADO"), permitirClienteOPermisoPedido, pedidosController.crearPedido);
 router.post("/:id/items", permitirRoles("ADMIN", "MOZO", "PERSONALIZADO"), permitirPermisos("pedidos:crear"), pedidosController.agregarItems);
@@ -30,13 +36,21 @@ router.get(
 );
 router.get("/auditoria", permitirRoles("ADMIN", "MOZO", "PERSONALIZADO"), permitirPermisos("pedidos:ver"), pedidosController.auditarPedidos);
 router.get("/resumen", permitirRoles("ADMIN"), permitirPermisos("pedidos:ver"), pedidosController.obtenerResumenPedidos);
+// ⚠️ Debe ir ANTES de "/:id", si no Express lo interpreta como un id
+router.get("/sin-repartidor", permitirRoles("ADMIN", "PERSONALIZADO"), permitirPermisos("reparto:gestion"), pedidosController.listarSinRepartidor);
 router.get("/", permitirRoles("ADMIN", "MOZO", "PERSONALIZADO"), permitirPermisos("pedidos:ver"), pedidosController.listarTodos);
 router.get("/rendimiento", permitirRoles("ADMIN", "MOZO", "PERSONALIZADO"), permitirPermisos("pedidos:ver"), pedidosController.obtenerRendimiento);
+router.get("/:id/sugerir-repartidores", permitirRoles("ADMIN", "PERSONALIZADO"), permitirPermisos("reparto:gestion"), pedidosController.sugerirRepartidores);
 router.get("/:id", pedidosController.obtenerPorId);
 
 // Operaciones de Caja y Reparto
 router.patch("/:id/confirmar-pago", permitirRoles("ADMIN", "MOZO", "PERSONALIZADO"), permitirPermisos("pedidos:cobrar"), pedidosController.confirmarPago);
 router.patch("/:id/estado", permitirRoles("ADMIN", "MOZO", "PERSONALIZADO", "REPARTIDOR"), pedidosController.actualizarEstado);
 router.patch("/:id/asignar-repartidor", permitirRoles("ADMIN", "PERSONALIZADO"), permitirPermisos("reparto:gestion"), pedidosController.asignarRepartidor);
+router.patch("/:id/liberar-repartidor", permitirRoles("ADMIN", "PERSONALIZADO", "REPARTIDOR"), permitirRepartidorOGestionReparto, pedidosController.liberarRepartidor);
+
+// Entrega con código de confirmación
+router.patch("/:id/entregar", permitirRoles("REPARTIDOR"), pedidosController.entregarConCodigo);
+router.patch("/:id/resetear-codigo", permitirRoles("ADMIN", "PERSONALIZADO"), permitirPermisos("reparto:gestion"), pedidosController.resetearCodigoEntrega);
 
 module.exports = router;

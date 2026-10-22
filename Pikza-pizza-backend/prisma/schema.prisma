@@ -65,7 +65,7 @@ model Usuario {
 
   direcciones      Direccion[]
   pedidos          Pedido[]         @relation("PedidosCliente")
-  pedidosAtendidos Pedido[]         @relation("PedidosAtendidosPorStaff") // 👈 AGREGAR ESTA LÍNEA
+  pedidosAtendidos Pedido[]         @relation("PedidosAtendidosPorStaff")
   atencionesPedido PedidoAtencion[]
   repartidor       Repartidor?
 
@@ -176,8 +176,8 @@ model Pedido {
   codigo        String       @unique
   clienteId     Int
   cliente       Usuario      @relation("PedidosCliente", fields: [clienteId], references: [id])
-  atendidoPorId Int? // 👈 AGREGAR
-  atendidoPor   Usuario?     @relation("PedidosAtendidosPorStaff", fields: [atendidoPorId], references: [id]) // 👈 AGREGAR
+  atendidoPorId Int?
+  atendidoPor   Usuario?     @relation("PedidosAtendidosPorStaff", fields: [atendidoPorId], references: [id])
   clienteNombre String?
   canal         CanalPedido
   estado        EstadoPedido @default(PENDIENTE_PAGO)
@@ -191,6 +191,13 @@ model Pedido {
   total         Decimal      @db.Decimal(10, 2)
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
+
+  // ------ Confirmación de entrega por código ------
+  // Se genera solo al pasar el pedido a EN_CAMINO (nunca antes).
+  // El repartidor lo ingresa en su app al momento de la entrega.
+  codigoConfirmacion     String?
+  confirmadoEn           DateTime?
+  intentosCodigoFallidos Int       @default(0)
 
   items             PedidoItem[]
   pago              Pago?

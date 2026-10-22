@@ -37,6 +37,19 @@ const actualizarEstadoSchema = z.object({
   estado: z.enum(["EN_PREPARACION", "EN_CAMINO", "ENTREGADO", "CANCELADO"]),
 });
 
+// Código de confirmación de entrega: exactamente 4 dígitos
+const entregarConCodigoSchema = z.object({
+  codigo: z
+    .string()
+    .trim()
+    .regex(/^\d{4}$/, "El código debe tener exactamente 4 dígitos"),
+});
+
+// regenerar = true genera un código nuevo además de poner los intentos en 0
+const resetearCodigoSchema = z.object({
+  regenerar: z.boolean().optional().default(false),
+});
+
 const listarPedidosQuerySchema = z
   .object({
     desde: z.string().datetime({ offset: true }).optional(),
@@ -78,6 +91,8 @@ module.exports = {
   agregarItemsSchema,
   confirmarPagoSchema,
   actualizarEstadoSchema,
+  entregarConCodigoSchema,
+  resetearCodigoSchema,
   listarPedidosQuerySchema,
   auditarPedidosQuerySchema,
 };

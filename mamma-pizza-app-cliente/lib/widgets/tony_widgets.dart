@@ -57,7 +57,8 @@ class TonysLogo extends StatelessWidget {
   }
 }
 
-/// Imagen provisional: fondo cálido + ícono de pizza (luego se cambia por la foto).
+/// Imagen del producto: muestra la foto real (imagenUrl) si existe y carga bien;
+/// si no hay URL, está cargando, o falla, cae al fondo cálido + ícono de pizza.
 class PizzaPlaceholder extends StatelessWidget {
   final double? width;
   final double? height;
@@ -65,6 +66,7 @@ class PizzaPlaceholder extends StatelessWidget {
   final double iconSize;
   final IconData icono;
   final bool circular;
+  final String? imagenUrl;
 
   const PizzaPlaceholder({
     super.key,
@@ -74,10 +76,10 @@ class PizzaPlaceholder extends StatelessWidget {
     this.iconSize = 40,
     this.icono = Icons.local_pizza,
     this.circular = false,
+    this.imagenUrl,
   });
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _fallback() {
     return Container(
       width: width,
       height: height,
@@ -93,6 +95,29 @@ class PizzaPlaceholder extends StatelessWidget {
       child: Center(
         child: Icon(icono, size: iconSize, color: AppColors.primary),
       ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final url = imagenUrl?.trim();
+    if (url == null || url.isEmpty) return _fallback();
+
+    final imagen = Image.network(
+      url,
+      width: width,
+      height: height,
+      fit: BoxFit.cover,
+      loadingBuilder: (context, child, progreso) {
+        if (progreso == null) return child;
+        return _fallback();
+      },
+      errorBuilder: (context, error, stackTrace) => _fallback(),
+    );
+
+    return ClipRRect(
+      borderRadius: circular ? BorderRadius.circular(1000) : BorderRadius.circular(radius),
+      child: imagen,
     );
   }
 }
@@ -192,6 +217,7 @@ class TarjetaProducto extends StatelessWidget {
                 radius: 14,
                 iconSize: 42,
                 icono: iconoCategoria(producto.categoriaNombre),
+                imagenUrl: producto.imagenUrl,
               ),
               const SizedBox(width: 12),
               Expanded(

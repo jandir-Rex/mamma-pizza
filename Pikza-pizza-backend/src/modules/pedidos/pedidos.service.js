@@ -1,4 +1,5 @@
 // src/modules/pedidos/pedidos.service.js
+const crypto = require("crypto");
 const prisma = require("../../config/prisma");
 const { emitPedidoNuevo, emitPedidoActualizado } = require("../../sockets");
 
@@ -7,6 +8,13 @@ const PERMISOS_POR_CANAL = {
   PARA_LLEVAR: "pedidos:canal:PARA_LLEVAR",
   DELIVERY: "pedidos:canal:DELIVERY",
 };
+
+// ------------------- CONSTANTES DE REPARTO -------------------
+const MAX_INTENTOS_CODIGO = 3;
+const ESTADOS_FINALES = ["ENTREGADO", "CANCELADO"];
+const ESTADOS_ASIGNABLES = ["CONFIRMADO", "EN_PREPARACION"];
+// Poner AUTO_ASIGNAR_REPARTIDOR=false en .env para desactivar la auto-asignación
+const AUTO_ASIGNAR = process.env.AUTO_ASIGNAR_REPARTIDOR !== "false";
 
 function obtenerCanalOperativo(pedido) {
   if (pedido.canal === "DELIVERY") return "DELIVERY";
@@ -25,6 +33,46 @@ function validarAccesoCanal(solicitante, pedido, permisoBase) {
 
 function generarCodigo() {
   return `PZ-${Date.now().toString(36).toUpperCase()}`;
+}
+
+// Código de 4 dígitos para confirmar la entrega (criptográficamente aleatorio)
+function generarCodigoEntrega() {
+  return crypto.randomInt(0, 10000).toString().padStart(4, "0");
+}
+
+// El repartidor NUNCA debe ver el código: solo el cliente (y administración)
+function ocultarCodigoSiRepartidor(pedido, solicitante) {
+  if (!pedido || solicitante?.rol !== "REPARTIDOR") return pedido;
+  const { codigoConfirmacion, ...resto } = pedido;
+  return resto;
+}
+
+// ADMIN siempre; PERSONALIZADO solo con el permiso reparto:gestion
+function validarGestionReparto(solicitante) {
+  if (solicitante?.rol === "ADMIN") return;
+  if (solicitante?.rol === "PERSONALIZADO" && (solicitante.permisos || []).includes("reparto:gestion")) return;
+  const error = new Error("No tienes permiso para gestionar el reparto");
+  error.status = 403;
+  throw error;
+}
+
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const rad = (g) => (g * Math.PI) / 180;
+  const dLat = rad(lat2 - lat1);
+  const dLng = rad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// Fire-and-forget: la auto-asignación nunca debe romper ni demorar la respuesta principal
+function dispararAutoAsignacion(tarea) {
+  if (!AUTO_ASIGNAR) return;
+  setImmediate(() => {
+    tarea().catch((err) => console.error("[auto-asignación]", err.message));
+  });
 }
 
 const TRANSICIONES_VALIDAS = {
@@ -250,6 +298,12 @@ async function confirmarPago(pedidoId, metodo, solicitante) {
   });
 
   emitPedidoActualizado(pedido);
+
+  // Pedido de delivery confirmado => se le busca repartidor de inmediato
+  if (pedido.canal === "DELIVERY") {
+    dispararAutoAsignacion(() => autoAsignarPedido(pedido.id));
+  }
+
   return pedido;
 }
 
@@ -272,14 +326,19 @@ async function actualizarEstado(pedidoId, nuevoEstado, solicitante) {
         error.status = 403;
         throw error;
       }
+
+      // El repartidor SOLO puede iniciar la entrega. Para ENTREGADO debe usar el código.
+      if (nuevoEstado === "ENTREGADO") {
+        const error = new Error("Para marcar la entrega debes ingresar el código de confirmación del cliente");
+        error.status = 403;
+        throw error;
+      }
       const transicionRepartidorValida =
         pedido.canal === "DELIVERY" &&
-        ((pedido.estado === "EN_PREPARACION" && nuevoEstado === "EN_CAMINO") ||
-          (pedido.estado === "EN_CAMINO" && nuevoEstado === "ENTREGADO"));
+        pedido.estado === "EN_PREPARACION" &&
+        nuevoEstado === "EN_CAMINO";
       if (!transicionRepartidorValida) {
-        const error = new Error(
-          "El repartidor solo puede iniciar una entrega preparada o confirmar su entrega en curso"
-        );
+        const error = new Error("El repartidor solo puede iniciar una entrega que ya esté preparada");
         error.status = 409;
         throw error;
       }
@@ -333,9 +392,24 @@ async function actualizarEstado(pedidoId, nuevoEstado, solicitante) {
       throw error;
     }
 
+    // 🔒 Ninguna pizza sale a la calle sin repartidor
+    if (nuevoEstado === "EN_CAMINO" && !pedido.repartidorId) {
+      const error = new Error("Este pedido no tiene repartidor asignado; asigna uno antes de despacharlo");
+      error.status = 409;
+      throw error;
+    }
+
     const actualizado = await tx.pedido.update({
       where: { id: pedidoId },
-      data: { estado: nuevoEstado },
+      data: {
+        estado: nuevoEstado,
+        // El código nace SOLO al pasar a EN_CAMINO (y se reinicia el contador de intentos)
+        ...(nuevoEstado === "EN_CAMINO" && {
+          codigoConfirmacion: generarCodigoEntrega(),
+          intentosCodigoFallidos: 0,
+          confirmadoEn: null,
+        }),
+      },
     });
 
     if (
@@ -365,8 +439,113 @@ async function actualizarEstado(pedidoId, nuevoEstado, solicitante) {
     return actualizado;
   });
 
+  // Se emite el pedido completo (el cliente recibe su código por la sala del pedido)
   emitPedidoActualizado(resultado);
-  return resultado;
+
+  // Un repartidor se liberó (entregado/cancelado): ¿hay pedidos esperando?
+  if (ESTADOS_FINALES.includes(nuevoEstado)) {
+    dispararAutoAsignacion(autoAsignarPendientes);
+  }
+
+  // Pero la RESPUESTA HTTP al repartidor va sin el código
+  return ocultarCodigoSiRepartidor(resultado, solicitante);
+}
+
+// ------------------- REPARTO: SUGERENCIA / ASIGNACIÓN / LIBERACIÓN -------------------
+
+/**
+ * Top N repartidores para un pedido de delivery.
+ * Candidatos: disponible = true y con capacidad libre.
+ * Score (menor = mejor) = 0.5 * carga relativa + 0.5 * distancia normalizada (Haversine).
+ *  - carga relativa = pedidos activos / capacidadPedidos
+ *  - distancia normalizada = distancia / distancia máxima entre los candidatos
+ *  - Repartidor sin ubicación => distancia normalizada = 1 (peor caso), distanciaKm = null
+ */
+async function sugerirRepartidores(pedidoId, { excluir = [], limite = 3 } = {}) {
+  const pedido = await prisma.pedido.findUnique({
+    where: { id: pedidoId },
+    include: { direccion: true },
+  });
+  if (!pedido) {
+    const error = new Error("Pedido no encontrado");
+    error.status = 404;
+    throw error;
+  }
+  if (pedido.canal !== "DELIVERY") {
+    const error = new Error("Solo los pedidos de delivery necesitan repartidor");
+    error.status = 400;
+    throw error;
+  }
+  if (!pedido.direccion) {
+    const error = new Error("El pedido no tiene una dirección válida para calcular distancias");
+    error.status = 400;
+    throw error;
+  }
+
+  const repartidores = await prisma.repartidor.findMany({
+    where: {
+      disponible: true,
+      ...(excluir.length > 0 && { id: { notIn: excluir } }),
+    },
+    include: { usuario: { select: { nombre: true } } },
+  });
+
+  if (repartidores.length === 0) {
+    return { pedidoId, candidatos: [], motivo: "No hay repartidores disponibles" };
+  }
+
+  const cargas = await prisma.pedido.groupBy({
+    by: ["repartidorId"],
+    where: {
+      repartidorId: { in: repartidores.map((r) => r.id) },
+      estado: { notIn: ESTADOS_FINALES },
+    },
+    _count: { _all: true },
+  });
+  const activosPorRepartidor = new Map(cargas.map((c) => [c.repartidorId, c._count._all]));
+
+  const conCapacidad = repartidores
+    .map((r) => {
+      const activos = activosPorRepartidor.get(r.id) || 0;
+      const distanciaKm =
+        r.latActual != null && r.lngActual != null
+          ? haversineKm(r.latActual, r.lngActual, pedido.direccion.lat, pedido.direccion.lng)
+          : null;
+      return { r, activos, distanciaKm };
+    })
+    .filter(({ r, activos }) => activos < r.capacidadPedidos);
+
+  if (conCapacidad.length === 0) {
+    return { pedidoId, candidatos: [], motivo: "Todos los repartidores están en su capacidad máxima" };
+  }
+
+  const distancias = conCapacidad.map((c) => c.distanciaKm).filter((d) => d != null);
+  const maxDist = distancias.length ? Math.max(...distancias) : 0;
+
+  const candidatos = conCapacidad
+    .map(({ r, activos, distanciaKm }) => {
+      const cargaRelativa = activos / Math.max(r.capacidadPedidos, 1);
+      const distanciaNorm = distanciaKm == null ? 1 : maxDist > 0 ? distanciaKm / maxDist : 0;
+      const score = 0.5 * cargaRelativa + 0.5 * distanciaNorm;
+      return {
+        repartidorId: r.id,
+        nombre: r.usuario.nombre,
+        vehiculo: r.vehiculo,
+        pedidosActivos: activos,
+        capacidadPedidos: r.capacidadPedidos,
+        distanciaKm: distanciaKm == null ? null : Number(distanciaKm.toFixed(2)),
+        score: Number(score.toFixed(3)),
+      };
+    })
+    .sort(
+      (a, b) =>
+        a.score - b.score ||
+        (a.distanciaKm ?? Infinity) - (b.distanciaKm ?? Infinity) ||
+        a.repartidorId - b.repartidorId,
+    )
+    .slice(0, limite);
+
+  return { pedidoId, candidatos };
 }
 
 async function asignarRepartidor(pedidoId, repartidorId) {
@@ -434,6 +613,265 @@ async function asignarRepartidor(pedidoId, repartidorId) {
   return resultado;
 }
 
+/**
+ * Intenta asignar automáticamente el mejor candidato a UN pedido.
+ * Prueba el top 3 en orden; si uno falla por carrera (409), pasa al siguiente.
+ * Devuelve el pedido asignado, o null si no hay nadie (queda en la lista "sin repartidor").
+ */
+async function autoAsignarPedido(pedidoId, excluir = []) {
+  const pedido = await prisma.pedido.findUnique({
+    where: { id: pedidoId },
+    select: { id: true, canal: true, estado: true, repartidorId: true },
+  });
+  if (
+    !pedido ||
+    pedido.canal !== "DELIVERY" ||
+    pedido.repartidorId ||
+    !ESTADOS_ASIGNABLES.includes(pedido.estado)
+  ) {
+    return null;
+  }
+
+  const { candidatos } = await sugerirRepartidores(pedidoId, { excluir, limite: 3 });
+  for (const candidato of candidatos) {
+    try {
+      return await asignarRepartidor(pedidoId, candidato.repartidorId);
+    } catch (err) {
+      if (err.status === 409) continue; // otro proceso se adelantó o se llenó su cupo
+      throw err;
+    }
+  }
+  return null;
+}
+
+/**
+ * Recorre los pedidos de delivery que siguen sin repartidor (los más antiguos primero)
+ * y trata de asignarlos. Llamar cada vez que se libera cupo:
+ * entrega/cancelación, liberación, repartidor que se vuelve a poner disponible, etc.
+ */
+async function autoAsignarPendientes() {
+  const pendientes = await prisma.pedido.findMany({
+    where: {
+      canal: "DELIVERY",
+      repartidorId: null,
+      estado: { in: ESTADOS_ASIGNABLES },
+    },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+    take: 20,
+  });
+
+  for (const { id } of pendientes) {
+    try {
+      await autoAsignarPedido(id);
+    } catch (err) {
+      console.error(`[auto-asignación] pedido ${id}:`, err.message);
+    }
+  }
+}
+
+// Pedidos de delivery "al aire": para el tablero de admin
+async function listarSinRepartidor() {
+  return prisma.pedido.findMany({
+    where: {
+      canal: "DELIVERY",
+      repartidorId: null,
+      estado: { in: ESTADOS_ASIGNABLES },
+    },
+    include: {
+      items: { include: { agregados: true } },
+      pago: true,
+      direccion: true,
+      cliente: { select: { nombre: true, telefono: true } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+/**
+ * Suelta el pedido: vuelve al pool. Lo puede hacer el repartidor asignado
+ * o un admin/personalizado con reparto:gestion. Bloqueado si ya está EN_CAMINO.
+ */
+async function liberarRepartidor(pedidoId, solicitante) {
+  const { pedido, repartidorLiberadoId } = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`
+      SELECT id FROM pedidos WHERE id = ${pedidoId} FOR UPDATE
+    `;
+    const actual = await tx.pedido.findUnique({ where: { id: pedidoId } });
+    if (!actual) {
+      const error = new Error("Pedido no encontrado");
+      error.status = 404;
+      throw error;
+    }
+    if (!actual.repartidorId) {
+      const error = new Error("Este pedido no tiene repartidor asignado");
+      error.status = 409;
+      throw error;
+    }
+
+    if (solicitante.rol === "REPARTIDOR") {
+      const perfil = await tx.repartidor.findUnique({ where: { usuarioId: solicitante.id } });
+      if (!perfil || perfil.id !== actual.repartidorId) {
+        const error = new Error("No tienes asignado este pedido");
+        error.status = 403;
+        throw error;
+      }
+    } else {
+      validarGestionReparto(solicitante);
+    }
+
+    if (actual.estado === "EN_CAMINO") {
+      const error = new Error(
+        "El pedido ya está en camino y no se puede soltar. Coordina con administración para resolverlo."
+      );
+      error.status = 409;
+      throw error;
+    }
+    if (!ESTADOS_ASIGNABLES.includes(actual.estado)) {
+      const error = new Error("Solo se puede soltar un pedido confirmado o en preparación");
+      error.status = 409;
+      throw error;
+    }
+
+    const liberado = await tx.pedido.update({
+      where: { id: pedidoId },
+      data: { repartidorId: null },
+      include: { items: true, pago: true },
+    });
+    return { pedido: liberado, repartidorLiberadoId: actual.repartidorId };
+  });
+
+  emitPedidoActualizado(pedido);
+
+  // Vuelve al pool: se reasigna excluyendo a quien lo soltó
+  dispararAutoAsignacion(() => autoAsignarPedido(pedidoId, [repartidorLiberadoId]));
+
+  return pedido;
+}
+
+// ------------------- CÓDIGO DE CONFIRMACIÓN DE ENTREGA -------------------
+
+/**
+ * El repartidor ingresa el código que le da el cliente.
+ * Importante: el contador de intentos se guarda DENTRO de la transacción pero el error
+ * se lanza DESPUÉS de hacer commit; si se lanzara adentro, el rollback borraría el intento.
+ */
+async function entregarPedidoConCodigo(pedidoId, codigo, solicitante) {
+  const resultado = await prisma.$transaction(async (tx) => {
+    // Bloqueo de fila: dos intentos simultáneos no pueden saltarse el contador
+    await tx.$queryRaw`
+      SELECT id FROM pedidos WHERE id = ${pedidoId} FOR UPDATE
+    `;
+    const pedido = await tx.pedido.findUnique({ where: { id: pedidoId } });
+    if (!pedido) {
+      const error = new Error("Pedido no encontrado");
+      error.status = 404;
+      throw error;
+    }
+
+    const perfil = await tx.repartidor.findUnique({ where: { usuarioId: solicitante.id } });
+    if (!perfil || pedido.repartidorId !== perfil.id) {
+      const error = new Error("No tienes asignado este pedido");
+      error.status = 403;
+      throw error;
+    }
+    if (pedido.canal !== "DELIVERY") {
+      const error = new Error("Solo los pedidos de delivery se confirman con código");
+      error.status = 400;
+      throw error;
+    }
+    if (pedido.estado !== "EN_CAMINO") {
+      const error = new Error("El pedido debe estar en camino para confirmar la entrega");
+      error.status = 409;
+      throw error;
+    }
+    if (!pedido.codigoConfirmacion) {
+      const error = new Error("Este pedido no tiene código de confirmación; contacta a administración");
+      error.status = 409;
+      throw error;
+    }
+    if (pedido.intentosCodigoFallidos >= MAX_INTENTOS_CODIGO) {
+      return { bloqueado: true };
+    }
+
+    if (codigo !== pedido.codigoConfirmacion) {
+      const { intentosCodigoFallidos } = await tx.pedido.update({
+        where: { id: pedidoId },
+        data: { intentosCodigoFallidos: { increment: 1 } },
+        select: { intentosCodigoFallidos: true },
+      });
+      return { incorrecto: true, intentos: intentosCodigoFallidos };
+    }
+
+    const entregado = await tx.pedido.update({
+      where: { id: pedidoId },
+      data: { estado: "ENTREGADO", confirmadoEn: new Date() },
+    });
+    return { entregado };
+  });
+
+  if (resultado.bloqueado) {
+    const error = new Error(
+      "Código bloqueado por demasiados intentos fallidos. Pide a administración que lo reinicie."
+    );
+    error.status = 423;
+    throw error;
+  }
+  if (resultado.incorrecto) {
+    const restantes = MAX_INTENTOS_CODIGO - resultado.intentos;
+    const error = new Error(
+      restantes > 0
+        ? `Código incorrecto. Te quedan ${restantes} intento${restantes === 1 ? "" : "s"}.`
+        : "Código incorrecto. Se bloqueó la entrega; pide a administración que lo reinicie."
+    );
+    error.status = restantes > 0 ? 400 : 423;
+    throw error;
+  }
+
+  emitPedidoActualizado(resultado.entregado);
+  dispararAutoAsignacion(autoAsignarPendientes); // el repartidor ya tiene cupo libre
+
+  return ocultarCodigoSiRepartidor(resultado.entregado, solicitante);
+}
+
+/**
+ * Para cuando el repartidor se traba en los intentos. Lo usa un admin
+ * (o personalizado con reparto:gestion). Con regenerar=true además se cambia el código.
+ */
+async function resetearCodigoEntrega(pedidoId, { regenerar = false } = {}, solicitante) {
+  validarGestionReparto(solicitante);
+
+  const pedido = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`
+      SELECT id FROM pedidos WHERE id = ${pedidoId} FOR UPDATE
+    `;
+    const actual = await tx.pedido.findUnique({ where: { id: pedidoId } });
+    if (!actual) {
+      const error = new Error("Pedido no encontrado");
+      error.status = 404;
+      throw error;
+    }
+    if (actual.canal !== "DELIVERY" || actual.estado !== "EN_CAMINO") {
+      const error = new Error("Solo se puede reiniciar el código de un pedido de delivery que está en camino");
+      error.status = 409;
+      throw error;
+    }
+
+    return tx.pedido.update({
+      where: { id: pedidoId },
+      data: {
+        intentosCodigoFallidos: 0,
+        ...(regenerar && { codigoConfirmacion: generarCodigoEntrega() }),
+      },
+    });
+  });
+
+  emitPedidoActualizado(pedido);
+  return pedido;
+}
+
+// ------------------- CONSULTAS -------------------
+
 async function misEntregas(usuarioId) {
   const repartidor = await prisma.repartidor.findUnique({ where: { usuarioId } });
   if (!repartidor) {
@@ -450,6 +888,7 @@ async function misEntregas(usuarioId) {
       direccion: true,
       cliente: { select: { nombre: true, telefono: true } },
     },
+    omit: { codigoConfirmacion: true }, // 🔒 el repartidor nunca ve el código
     orderBy: { createdAt: "desc" },
     take: 20,
   });
@@ -560,6 +999,8 @@ async function listarHistorial({ desde, hasta } = {}, solicitante) {
       repartidor: { include: { usuario: { select: { nombre: true } } } },
       historialAtencion: { orderBy: { createdAt: "asc" } },
     },
+    // 🔒 el repartidor nunca ve el código
+    ...(solicitante?.rol === "REPARTIDOR" && { omit: { codigoConfirmacion: true } }),
     orderBy: { createdAt: "desc" },
   });
 }
@@ -874,6 +1315,8 @@ async function obtenerPorId(id, solicitante) {
       atendidoPor: { select: { id: true, nombre: true, rol: true } },
       historialAtencion: { orderBy: { createdAt: "asc" } },
     },
+    // 🔒 el repartidor nunca ve el código
+    ...(solicitante.rol === "REPARTIDOR" && { omit: { codigoConfirmacion: true } }),
   });
 
   if (!pedido) {
@@ -1036,6 +1479,13 @@ module.exports = {
   confirmarPago,
   actualizarEstado,
   asignarRepartidor,
+  sugerirRepartidores,
+  autoAsignarPedido,
+  autoAsignarPendientes, // 👈 llamarla desde repartidores cuando alguien se pone disponible
+  listarSinRepartidor,
+  liberarRepartidor,
+  entregarPedidoConCodigo,
+  resetearCodigoEntrega,
   misEntregas,
   listarPedidosCliente,
   listarTodos,

@@ -4,6 +4,8 @@ const {
   agregarItemsSchema,
   confirmarPagoSchema,
   actualizarEstadoSchema,
+  entregarConCodigoSchema,
+  resetearCodigoSchema,
   listarPedidosQuerySchema,
   auditarPedidosQuerySchema,
 } = require("./pedidos.validation");
@@ -67,6 +69,62 @@ async function asignarRepartidor(req, res, next) {
     res.json(pedido);
   } catch (err) {
     next(err);
+  }
+}
+
+// GET /:id/sugerir-repartidores -> top 3 candidatos
+async function sugerirRepartidores(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    const sugerencia = await pedidosService.sugerirRepartidores(id);
+    res.json(sugerencia);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// GET /sin-repartidor -> pedidos delivery que siguen "al aire"
+async function listarSinRepartidor(req, res, next) {
+  try {
+    const pedidos = await pedidosService.listarSinRepartidor();
+    res.json(pedidos);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// PATCH /:id/liberar-repartidor
+async function liberarRepartidor(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    const pedido = await pedidosService.liberarRepartidor(id, req.usuario);
+    res.json(pedido);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// PATCH /:id/entregar  { codigo: "1234" }
+async function entregarConCodigo(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    const { codigo } = entregarConCodigoSchema.parse(req.body);
+    const pedido = await pedidosService.entregarPedidoConCodigo(id, codigo, req.usuario);
+    res.json(pedido);
+  } catch (err) {
+    manejarZodError(err, res, next);
+  }
+}
+
+// PATCH /:id/resetear-codigo  { regenerar?: boolean }
+async function resetearCodigoEntrega(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    const { regenerar } = resetearCodigoSchema.parse(req.body ?? {});
+    const pedido = await pedidosService.resetearCodigoEntrega(id, { regenerar }, req.usuario);
+    res.json(pedido);
+  } catch (err) {
+    manejarZodError(err, res, next);
   }
 }
 
@@ -154,6 +212,11 @@ module.exports = {
   confirmarPago,
   actualizarEstado,
   asignarRepartidor,
+  sugerirRepartidores,
+  listarSinRepartidor,
+  liberarRepartidor,
+  entregarConCodigo,
+  resetearCodigoEntrega,
   misEntregas,
   misPedidos,
   listarTodos,

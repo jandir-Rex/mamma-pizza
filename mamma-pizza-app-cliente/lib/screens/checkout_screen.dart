@@ -7,6 +7,7 @@ import '../services/direcciones_service.dart';
 import '../services/pedidos_service.dart';
 import '../providers/carrito_provider.dart';
 import 'pedido_exito_screen.dart';
+import 'seleccionar_ubicacion_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -45,53 +46,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
+  /// Abre el mapa para elegir la ubicación exacta; devuelve la dirección ya guardada.
   Future<void> _agregarDireccion() async {
-    final zonaCtrl = TextEditingController();
-    final refCtrl = TextEditingController();
-    final resultado = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text("Nueva dirección", style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 16),
-            TextField(controller: zonaCtrl, decoration: const InputDecoration(labelText: "Zona / Dirección")),
-            const SizedBox(height: 12),
-            TextField(controller: refCtrl, decoration: const InputDecoration(labelText: "Referencia (opcional)")),
-            const SizedBox(height: 16),
-            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Guardar dirección")),
-          ],
-        ),
-      ),
+    final nueva = await Navigator.of(context).push<Direccion>(
+      MaterialPageRoute<Direccion>(builder: (_) => const SeleccionarUbicacionScreen()),
     );
-
-    if (resultado == true && zonaCtrl.text.trim().isNotEmpty) {
-      try {
-        // Coordenadas de referencia (centro de Trujillo). Seleccionar la
-        // ubicación exacta en un mapa (OSM/Leaflet) queda como siguiente
-        // mejora de esta pantalla.
-        final nueva = await DireccionesService.crear(
-          zona: zonaCtrl.text.trim(),
-          referencia: refCtrl.text.trim(),
-          lat: -8.1116,
-          lng: -79.0287,
-        );
-        if (!mounted) return;
-        setState(() {
-          _direcciones = [nueva, ..._direcciones];
-          _direccionSeleccionada = nueva;
-        });
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString().replaceFirst("Exception: ", ""))));
-      }
-    }
+    if (nueva == null || !mounted) return;
+    setState(() {
+      _direcciones = [nueva, ..._direcciones];
+      _direccionSeleccionada = nueva;
+      _error = null;
+    });
   }
 
   Future<void> _confirmarPedido() async {
@@ -161,7 +126,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     ..._direcciones.map((d) {
                       final activa = d.id == _direccionSeleccionada?.id;
                       return GestureDetector(
-                        onTap: () => setState(() => _direccionSeleccionada = d),
+                        onTap: () => setState(() {
+                          _direccionSeleccionada = d;
+                          _error = null;
+                        }),
                         child: Container(
                           margin: const EdgeInsets.only(bottom: 10),
                           padding: const EdgeInsets.all(14),
@@ -192,8 +160,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     }),
                     OutlinedButton.icon(
                       onPressed: _agregarDireccion,
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text("Agregar dirección"),
+                      icon: const Icon(Icons.add_location_alt_outlined, size: 18),
+                      label: const Text("Agregar dirección en el mapa"),
                       style: OutlinedButton.styleFrom(
                         minimumSize: const Size.fromHeight(46),
                         side: const BorderSide(color: AppColors.primary),
