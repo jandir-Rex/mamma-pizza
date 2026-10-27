@@ -4,13 +4,41 @@ import 'package:google_fonts/google_fonts.dart';
 class AppColors {
   static const primary = Color(0xFF8B3A2E);
   static const primaryLight = Color(0xFFB35A46);
+  static const primaryDark = Color(0xFF5E2219);
   static const dark = Color(0xFF2B2118);
   static const gray = Color(0xFF7A7168);
   static const success = Color(0xFF1E7A34);
   static const warning = Color(0xFFE0A800);
   static const danger = Color(0xFFC0392B);
+  static const info = Color(0xFF2E7FD1);
   static const bg = Color(0xFFF7F3EE);
   static const surface = Colors.white;
+  static const border = Color(0xFFE8E2DA);
+}
+
+class AppGradients {
+  static const brand = LinearGradient(
+    colors: [AppColors.primaryDark, AppColors.primary, AppColors.primaryLight],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+  static const success = LinearGradient(
+    colors: [Color(0xFF1E7A34), Color(0xFF2FA04A)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+}
+
+class AppShadows {
+  static final soft = [
+    BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 16, offset: const Offset(0, 6)),
+  ];
+  static final floating = [
+    BoxShadow(color: Colors.black.withValues(alpha: 0.16), blurRadius: 26, offset: const Offset(0, 10)),
+  ];
+  static final hoja = [
+    BoxShadow(color: Colors.black.withValues(alpha: 0.16), blurRadius: 24, offset: const Offset(0, -6)),
+  ];
 }
 
 final appTheme = ThemeData(
@@ -48,10 +76,12 @@ final appTheme = ThemeData(
     style: ElevatedButton.styleFrom(
       backgroundColor: AppColors.primary,
       foregroundColor: Colors.white,
-      minimumSize: const Size.fromHeight(52),
+      disabledBackgroundColor: AppColors.border,
+      disabledForegroundColor: AppColors.gray,
+      minimumSize: const Size.fromHeight(54),
       elevation: 0,
       textStyle: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     ),
   ),
   inputDecorationTheme: InputDecorationTheme(
@@ -64,7 +94,7 @@ final appTheme = ThemeData(
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
-      borderSide: const BorderSide(color: Color(0xFFE8E2DA)),
+      borderSide: const BorderSide(color: AppColors.border),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
@@ -77,9 +107,20 @@ final appTheme = ThemeData(
     labelStyle: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500),
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(20),
-      side: const BorderSide(color: Color(0xFFE8E2DA)),
+      side: const BorderSide(color: AppColors.border),
     ),
     padding: const EdgeInsets.symmetric(horizontal: 4),
+  ),
+  snackBarTheme: SnackBarThemeData(
+    behavior: SnackBarBehavior.floating,
+    backgroundColor: AppColors.dark,
+    contentTextStyle: GoogleFonts.poppins(color: Colors.white, fontSize: 13),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+  ),
+  dialogTheme: DialogThemeData(
+    backgroundColor: Colors.white,
+    surfaceTintColor: Colors.transparent,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
   ),
 );
 

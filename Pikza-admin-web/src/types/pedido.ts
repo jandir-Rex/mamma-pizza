@@ -8,6 +8,9 @@ export type EstadoPedido =
   | "ENTREGADO"
   | "CANCELADO";
 
+// Debe coincidir con MAX_INTENTOS_CODIGO del backend
+export const MAX_INTENTOS_CODIGO = 3;
+
 export type Pedido = {
   id: number;
   codigo: string;
@@ -17,6 +20,18 @@ export type Pedido = {
   createdAt: string;
   repartidorId?: number | null;
   repartidor?: { id: number; usuario?: { nombre: string } } | null;
+  // --- Código de confirmación de entrega ---
+  // codigoConfirmacion SOLO llega a admin/cliente; al repartidor el backend nunca se lo manda.
+  codigoConfirmacion?: string | null;
+  intentosCodigoFallidos?: number;
+  confirmadoEn?: string | null;
+  direccion?: {
+    id: number;
+    zona: string;
+    referencia?: string | null;
+    lat: number;
+    lng: number;
+  } | null;
   clienteId?: number;
   clienteNombre?: string | null; // 👈 Nombre del comensal presencial (ej: "PruebaTest")
   cliente?: { nombre: string; telefono?: string };
@@ -47,6 +62,23 @@ export type VarianteInfo = {
   nombre: string;
   tamano: string;
   areaPreparacion?: "HORNO" | "BARRA";
+};
+
+// Respuesta de GET /pedidos/:id/sugerir-repartidores
+export type CandidatoRepartidor = {
+  repartidorId: number;
+  nombre: string;
+  vehiculo?: string | null;
+  pedidosActivos: number;
+  capacidadPedidos: number;
+  distanciaKm: number | null; // null = el repartidor no tiene ubicación registrada
+  score: number;
+};
+
+export type SugerenciaRepartidores = {
+  pedidoId: number;
+  candidatos: CandidatoRepartidor[];
+  motivo?: string;
 };
 
 export type CanalOperativo = "SALON" | "PARA_LLEVAR" | "DELIVERY";

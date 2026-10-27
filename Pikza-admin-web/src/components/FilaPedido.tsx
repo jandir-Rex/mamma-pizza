@@ -1,5 +1,6 @@
 // src/components/FilaPedido.tsx
 import {
+  MAX_INTENTOS_CODIGO,
   formatoPrecio,
   obtenerEtiquetaEstado,
   type EstadoPedido,
@@ -33,6 +34,20 @@ export default function FilaPedido({
   const pagado = pedido.pago?.estado === "pagado";
   const nombreClienteVisible = pedido.clienteNombre || pedido.cliente?.nombre || "Cliente";
 
+  // --- Estado de reparto (solo delivery) ---
+  const esDelivery = pedido.canal === "DELIVERY";
+  const esperaRepartidor =
+    esDelivery &&
+    !pedido.repartidorId &&
+    (pedido.estado === "CONFIRMADO" || pedido.estado === "EN_PREPARACION");
+  const codigoBloqueado =
+    esDelivery &&
+    pedido.estado === "EN_CAMINO" &&
+    (pedido.intentosCodigoFallidos ?? 0) >= MAX_INTENTOS_CODIGO;
+  const nombreRepartidor =
+    pedido.repartidor?.usuario?.nombre ??
+    (pedido.repartidorId ? `Repartidor #${pedido.repartidorId}` : null);
+
   return (
     <button
       type="button"
@@ -47,7 +62,9 @@ export default function FilaPedido({
       <div className="flex min-w-52 flex-1 items-center gap-3">
         <span
           className={`hidden h-8 w-1 shrink-0 rounded-full sm:block ${
-            pedido.estado === "CONFIRMADO"
+            esperaRepartidor
+              ? "animate-pulse bg-error-500"
+              : pedido.estado === "CONFIRMADO"
               ? "bg-brand-500"
               : pedido.estado === "EN_PREPARACION"
                 ? "bg-warning-500"
@@ -64,6 +81,17 @@ export default function FilaPedido({
             <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${estiloEstado(pedido.estado)}`}>
               {obtenerEtiquetaEstado(pedido)}
             </span>
+
+            {esperaRepartidor && (
+              <span className="animate-pulse rounded-full bg-error-50 px-2 py-0.5 text-[11px] font-bold text-error-700 dark:bg-error-500/10 dark:text-error-400">
+                Sin repartidor
+              </span>
+            )}
+            {codigoBloqueado && (
+              <span className="rounded-full bg-error-50 px-2 py-0.5 text-[11px] font-bold text-error-700 dark:bg-error-500/10 dark:text-error-400">
+                Código bloqueado
+              </span>
+            )}
           </div>
 
           <p className="mt-1 truncate text-xs text-gray-500 dark:text-gray-400">
@@ -76,7 +104,13 @@ export default function FilaPedido({
               : pedido.mesa?.numero
               ? `Salón · Mesa ${pedido.mesa.numero}`
               : "Para Llevar"}
-            
+
+            {esDelivery && nombreRepartidor && (
+              <span className="ml-1.5 font-semibold text-gray-700 dark:text-gray-300">
+                · Reparte: {nombreRepartidor}
+              </span>
+            )}
+
             {pedido.atendidoPor && (
               <span className="ml-1.5 font-bold text-brand-600 dark:text-brand-400">
                 · Atiende: {pedido.atendidoPor.nombre} ({pedido.atendidoPor.rol === "ADMIN" ? "Mostrador" : "Mozo"})
@@ -105,6 +139,7 @@ export default function FilaPedido({
       </div>
       <span className="sr-only">
         {obtenerEtiquetaEstado(pedido)}, {tiempoTranscurrido(pedido.createdAt)}
+        {esperaRepartidor ? ", sin repartidor asignado" : ""}
       </span>
     </button>
   );

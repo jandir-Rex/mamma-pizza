@@ -1,15 +1,24 @@
+// src/pages/Administracion/DeliveryDashboard.tsx
 import { useEffect, useState } from "react";
 import { apiRequest } from "@/services/api";
-import { etiquetasEstado, formatoPrecio, type Pedido } from "@/types/pedido";
+import {
+  MAX_INTENTOS_CODIGO,
+  etiquetasEstado,
+  formatoPrecio,
+  type Pedido,
+} from "@/types/pedido";
 
 // Helper para colores según estado
 const ESTADO_ESTILOS: Record<string, string> = {
-  PENDIENTE: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800",
+  CONFIRMADO: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800",
   EN_PREPARACION: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800",
   EN_CAMINO: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800",
   ENTREGADO: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800",
   CANCELADO: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400 border-rose-200 dark:border-rose-800",
 };
+
+// Cada cuánto se refresca la lista sola (llegan pedidos nuevos por auto-asignación)
+const POLLING_MS = 20_000;
 
 export default function DeliveryDashboard() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
@@ -17,6 +26,10 @@ export default function DeliveryDashboard() {
   const [actualizandoId, setActualizandoId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [recarga, setRecarga] = useState(0);
+
+  // Código de confirmación que el repartidor teclea, por pedido
+  const [codigos, setCodigos] = useState<Record<number, string>>({});
+  const [erroresCodigo, setErroresCodigo] = useState<Record<number, string>>({});
 
   // Estado para el filtro de fecha / DatePicker
   const [fechaSeleccionada, setFechaSeleccionada] = useState<number>(new Date().getDate());
@@ -40,29 +53,102 @@ export default function DeliveryDashboard() {
     };
   }, [recarga]);
 
-  async function actualizarEstado(pedido: Pedido, estado: "EN_CAMINO" | "ENTREGADO") {
+  // Refresco silencioso: así aparecen solos los pedidos que el sistema te asigna
+  useEffect(() => {
+    const intervalo = setInterval(() => {
+      apiRequest<Pedido[]>("/pedidos/repartidor/mis-entregas")
+        .then(setPedidos)
+        .catch(() => undefined);
+    }, POLLING_MS);
+    return () => clearInterval(intervalo);
+  }, []);
+
+  function fusionarPedido(id: number, cambios: Partial<Pedido>) {
+    setPedidos((actuales) =>
+      actuales.map((item) => (item.id === id ? { ...item, ...cambios } : item)),
+    );
+  }
+
+  // EN_PREPARACION -> EN_CAMINO (el único cambio de estado directo que permite el backend)
+  async function iniciarEntrega(pedido: Pedido) {
     setActualizandoId(pedido.id);
     setError("");
 
     try {
       const actualizado = await apiRequest<Partial<Pedido>>(
         `/pedidos/${pedido.id}/estado`,
-        { method: "PATCH", body: JSON.stringify({ estado }) },
+        { method: "PATCH", body: JSON.stringify({ estado: "EN_CAMINO" }) },
       );
-      setPedidos((actuales) =>
-        actuales.map((item) =>
-          item.id === pedido.id ? { ...item, ...actualizado } : item,
-        ),
-      );
+      fusionarPedido(pedido.id, actualizado);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo actualizar la entrega");
+      setError(err instanceof Error ? err.message : "No se pudo iniciar la entrega");
+    } finally {
+      setActualizandoId(null);
+    }
+  }
+
+  // Entregar = ingresar el código de 4 dígitos que le da el cliente
+  async function entregarConCodigo(pedido: Pedido) {
+    const codigo = codigos[pedido.id] ?? "";
+    setActualizandoId(pedido.id);
+    setErroresCodigo((actuales) => ({ ...actuales, [pedido.id]: "" }));
+
+    try {
+      const actualizado = await apiRequest<Partial<Pedido>>(
+        `/pedidos/${pedido.id}/entregar`,
+        { method: "PATCH", body: JSON.stringify({ codigo }) },
+      );
+      fusionarPedido(pedido.id, actualizado);
+      setCodigos((actuales) => ({ ...actuales, [pedido.id]: "" }));
+    } catch (err) {
+      const mensaje = err instanceof Error ? err.message : "No se pudo confirmar la entrega";
+      setErroresCodigo((actuales) => ({ ...actuales, [pedido.id]: mensaje }));
+      setCodigos((actuales) => ({ ...actuales, [pedido.id]: "" }));
+
+      // Mantenemos el contador local en sync con el backend
+      const bloqueo = /bloque/i.test(mensaje);
+      const incorrecto = /incorrecto/i.test(mensaje);
+      if (bloqueo || incorrecto) {
+        setPedidos((actuales) =>
+          actuales.map((item) =>
+            item.id === pedido.id
+              ? {
+                  ...item,
+                  intentosCodigoFallidos: bloqueo
+                    ? MAX_INTENTOS_CODIGO
+                    : (item.intentosCodigoFallidos ?? 0) + 1,
+                }
+              : item,
+          ),
+        );
+      }
+    } finally {
+      setActualizandoId(null);
+    }
+  }
+
+  // El pedido vuelve al pool y el sistema le busca otro repartidor
+  async function soltarPedido(pedido: Pedido) {
+    if (!window.confirm(`¿Soltar el pedido ${pedido.codigo}? Se le buscará otro repartidor.`)) {
+      return;
+    }
+    setActualizandoId(pedido.id);
+    setError("");
+
+    try {
+      await apiRequest(`/pedidos/${pedido.id}/liberar-repartidor`, { method: "PATCH" });
+      setPedidos((actuales) => actuales.filter((item) => item.id !== pedido.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo soltar el pedido");
     } finally {
       setActualizandoId(null);
     }
   }
 
   // Métricas para el Mini-Bar Header
-  const pendientes = pedidos.filter((p) => p.estado === "EN_PREPARACION").length;
+  const pendientes = pedidos.filter(
+    (p) => p.estado === "CONFIRMADO" || p.estado === "EN_PREPARACION",
+  ).length;
   const enCamino = pedidos.filter((p) => p.estado === "EN_CAMINO").length;
   const entregados = pedidos.filter((p) => p.estado === "ENTREGADO").length;
 
@@ -125,7 +211,7 @@ export default function DeliveryDashboard() {
             </svg>
           </div>
           <div>
-            <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Por Recoger / Listos</p>
+            <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Por Recoger / En Cocina</p>
             <p className="text-2xl font-bold text-gray-900 dark:text-white">{pendientes}</p>
           </div>
         </div>
@@ -184,14 +270,15 @@ export default function DeliveryDashboard() {
       ) : (
         <section className="space-y-4">
           {pedidos.map((pedido) => {
-            const siguiente =
-              pedido.estado === "EN_PREPARACION"
-                ? "EN_CAMINO"
-                : pedido.estado === "EN_CAMINO"
-                ? "ENTREGADO"
-                : null;
-
             const esLlamable = Boolean(pedido.cliente?.telefono);
+            const ocupado = actualizandoId === pedido.id;
+            const puedeSoltar = pedido.estado === "CONFIRMADO" || pedido.estado === "EN_PREPARACION";
+
+            const intentos = pedido.intentosCodigoFallidos ?? 0;
+            const bloqueado = intentos >= MAX_INTENTOS_CODIGO;
+            const restantes = Math.max(MAX_INTENTOS_CODIGO - intentos, 0);
+            const codigo = codigos[pedido.id] ?? "";
+            const errorCodigo = erroresCodigo[pedido.id];
 
             return (
               <article
@@ -231,10 +318,23 @@ export default function DeliveryDashboard() {
                           {pedido.cliente?.telefono}
                         </a>
                       )}
+
+                      {pedido.direccion && (
+                        <div className="flex items-start gap-2 sm:col-span-2">
+                          <svg className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          <span>
+                            {pedido.direccion.zona}
+                            {pedido.direccion.referencia ? ` · ${pedido.direccion.referencia}` : ""}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {/* Info Derecha & Botón */}
+                  {/* Info Derecha & Botones */}
                   <div className="flex flex-wrap items-center justify-between gap-4 border-t border-gray-100 pt-4 dark:border-gray-800 md:border-t-0 md:pt-0">
                     <div className="text-right">
                       <p className="text-xs text-gray-500 dark:text-gray-400">Monto total</p>
@@ -243,41 +343,118 @@ export default function DeliveryDashboard() {
                       </p>
                     </div>
 
-                    {siguiente && (
-                      <button
-                        type="button"
-                        disabled={actualizandoId === pedido.id}
-                        onClick={() => actualizarEstado(pedido, siguiente)}
-                        className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition-all disabled:opacity-50 ${
-                          siguiente === "EN_CAMINO"
-                            ? "bg-indigo-600 hover:bg-indigo-700 focus:ring-4 focus:ring-indigo-100 dark:focus:ring-indigo-900/50"
-                            : "bg-emerald-600 hover:bg-emerald-700 focus:ring-4 focus:ring-emerald-100 dark:focus:ring-emerald-900/50"
-                        }`}
-                      >
-                        {actualizandoId === pedido.id ? (
-                          <>
-                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                            <span>Guardando...</span>
-                          </>
-                        ) : siguiente === "EN_CAMINO" ? (
-                          <>
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                            </svg>
-                            <span>Iniciar entrega</span>
-                          </>
-                        ) : (
-                          <>
-                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                            <span>Marcar como entregado</span>
-                          </>
-                        )}
-                      </button>
-                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {puedeSoltar && (
+                        <button
+                          type="button"
+                          disabled={ocupado}
+                          onClick={() => soltarPedido(pedido)}
+                          className="inline-flex items-center justify-center rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 transition-all hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                        >
+                          Soltar pedido
+                        </button>
+                      )}
+
+                      {pedido.estado === "EN_PREPARACION" && (
+                        <button
+                          type="button"
+                          disabled={ocupado}
+                          onClick={() => iniciarEntrega(pedido)}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition-all hover:bg-indigo-700 focus:ring-4 focus:ring-indigo-100 disabled:opacity-50 dark:focus:ring-indigo-900/50"
+                        >
+                          {ocupado ? (
+                            <>
+                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                              <span>Guardando...</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                              </svg>
+                              <span>Iniciar entrega</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
+
+                {/* CONFIRMACIÓN DE ENTREGA CON CÓDIGO */}
+                {pedido.estado === "EN_CAMINO" && (
+                  <div className="border-t border-gray-100 bg-gray-50 p-5 dark:border-gray-800 dark:bg-white/[0.02]">
+                    {bloqueado ? (
+                      <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-400">
+                        <p className="font-bold">Entrega bloqueada</p>
+                        <p className="mt-0.5">
+                          Agotaste los {MAX_INTENTOS_CODIGO} intentos. Pide a administración que reinicie el
+                          código de este pedido.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                          Pídele al cliente su código de 4 dígitos para confirmar la entrega
+                        </p>
+                        <div className="mt-3 flex flex-wrap items-center gap-3">
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
+                            maxLength={4}
+                            placeholder="••••"
+                            aria-label={`Código de confirmación del pedido ${pedido.codigo}`}
+                            value={codigo}
+                            disabled={ocupado}
+                            onChange={(event) =>
+                              setCodigos((actuales) => ({
+                                ...actuales,
+                                [pedido.id]: event.target.value.replace(/\D/g, "").slice(0, 4),
+                              }))
+                            }
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" && codigo.length === 4 && !ocupado) {
+                                void entregarConCodigo(pedido);
+                              }
+                            }}
+                            className="w-36 rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-center text-2xl font-black tracking-[0.4em] text-gray-900 outline-none focus:border-brand-500 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                          />
+                          <button
+                            type="button"
+                            disabled={ocupado || codigo.length !== 4}
+                            onClick={() => entregarConCodigo(pedido)}
+                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-xs transition-all hover:bg-emerald-700 focus:ring-4 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:opacity-50 dark:focus:ring-emerald-900/50"
+                          >
+                            {ocupado ? (
+                              <>
+                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                                <span>Validando...</span>
+                              </>
+                            ) : (
+                              <>
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                                <span>Confirmar entrega</span>
+                              </>
+                            )}
+                          </button>
+                          {intentos > 0 && (
+                            <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">
+                              Te quedan {restantes} intento{restantes === 1 ? "" : "s"}
+                            </span>
+                          )}
+                        </div>
+                        {errorCodigo && (
+                          <p role="alert" className="mt-2 text-xs font-semibold text-rose-600 dark:text-rose-400">
+                            {errorCodigo}
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
               </article>
             );
           })}

@@ -1,6 +1,7 @@
 // src/components/PanelDetallePedido.tsx
 import { useState } from "react";
 import { apiRequest } from "@/services/api";
+import { useAuth } from "@/context/AuthContext";
 import {
   etiquetasEstado,
   formatoPrecio,
@@ -12,6 +13,7 @@ import {
 import { imprimirComandasPreparacion, imprimirTicketTermico } from "@/utils/impresionTicket";
 import DrawerCobroMesa from "@/components/pedidos/DrawerCobroMesa";
 import DrawerAgregarConsumo from "@/components/pedidos/DrawerAgregarConsumo";
+import SeccionReparto from "@/components/pedidos/SeccionReparto";
 
 // --- ICONOS VECTORIALES PROFESIONALES ---
 function PrintIcon(props: React.SVGProps<SVGSVGElement>) {
@@ -57,11 +59,18 @@ export default function PanelDetallePedido({
   puedeCobrar = true,
   puedeGestionarEstado = true,
 }: Props) {
+  const { usuario } = useAuth();
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState("");
   const [drawerAgregarAbierto, setDrawerAgregarAbierto] = useState(false);
   const [drawerCobrarAbierto, setDrawerCobrarAbierto] = useState(false);
   const [historialExpandidoPara, setHistorialExpandidoPara] = useState<number | null>(null);
+
+  // ADMIN, o PERSONALIZADO con reparto:gestion (el backend lo valida igual)
+  const permisos = (usuario as { permisos?: string[] } | null)?.permisos ?? [];
+  const puedeGestionarReparto =
+    usuario?.rol === "ADMIN" ||
+    (usuario?.rol === "PERSONALIZADO" && permisos.includes("reparto:gestion"));
 
   if (!pedido) {
     return (
@@ -99,22 +108,34 @@ export default function PanelDetallePedido({
     }
   }
 
+  // Ya no es optimista: al pasar a EN_CAMINO el backend genera el código de entrega
+  // y necesitamos esa respuesta para mostrarlo.
   async function cambiarEstado(estado: EstadoPedido) {
     if (!pedido) return;
     setCargando(true);
+    setError("");
     try {
-      const optimista: Pedido = { ...pedido, estado };
-      onActualizado(optimista);
-      await apiRequest(`/pedidos/${pedido.id}/estado`, {
+      const actualizado = await apiRequest<Partial<Pedido>>(`/pedidos/${pedido.id}/estado`, {
         method: "PATCH",
         body: JSON.stringify({ estado }),
       });
+      onActualizado({ ...pedido, ...actualizado });
     } catch (err) {
-      onActualizado(pedido);
       setError(err instanceof Error ? err.message : "Error al actualizar estado");
     } finally {
       setCargando(false);
     }
+  }
+
+  function forzarEntrega() {
+    if (
+      !window.confirm(
+        "¿Marcar como entregado SIN el código del cliente? Quedará registrado como cierre manual.",
+      )
+    ) {
+      return;
+    }
+    void cambiarEstado("ENTREGADO");
   }
 
   const transicionesDisponibles = (transicionesEstado[pedido.estado] ?? []).filter(
@@ -313,13 +334,13 @@ export default function PanelDetallePedido({
         )}
       </section>
 
-      {/* Repartidor */}
-      {pedido.repartidor?.usuario?.nombre && (
-        <section className="mb-5">
-          <h3 className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-400">Repartidor Asignado</h3>
-          <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{pedido.repartidor.usuario.nombre}</p>
-        </section>
-      )}
+      {/* Reparto: asignación, top 3 sugeridos, liberar y código de entrega */}
+      <SeccionReparto
+        pedido={pedido}
+        puedeGestionar={puedeGestionarReparto}
+        soloLectura={soloLectura}
+        onActualizado={onActualizado}
+      />
 
       {/* Botones de Operación */}
       {!soloLectura && (
@@ -345,19 +366,30 @@ export default function PanelDetallePedido({
             Imprimir tickets de preparación
           </button>
 
-          {puedeGestionarEstado && transicionesDisponibles
-            .filter((e) => e !== "CANCELADO" && e !== "ENTREGADO")
-            .map((estado) => (
-              <button
-                key={estado}
-                type="button"
-                disabled={cargando}
-                onClick={() => cambiarEstado(estado)}
-                className="w-full rounded-xl bg-brand-500 py-2.5 text-sm font-bold text-white hover:bg-brand-600 disabled:opacity-50"
-              >
-                Marcar {etiquetasEstado[estado]}
-              </button>
-            ))}
+          {puedeGestionarEstado &&
+            transicionesDisponibles
+              .filter((e) => e !== "CANCELADO" && e !== "ENTREGADO")
+              .map((estado) => {
+                // Ninguna pizza sale a la calle sin repartidor (el backend también lo bloquea)
+                const faltaRepartidor = estado === "EN_CAMINO" && !pedido.repartidorId;
+                return (
+                  <div key={estado}>
+                    <button
+                      type="button"
+                      disabled={cargando || faltaRepartidor}
+                      onClick={() => cambiarEstado(estado)}
+                      className="w-full rounded-xl bg-brand-500 py-2.5 text-sm font-bold text-white hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Marcar {etiquetasEstado[estado]}
+                    </button>
+                    {faltaRepartidor && (
+                      <p className="mt-1 text-center text-[11px] font-semibold text-error-600 dark:text-error-400">
+                        Asigna un repartidor para poder despacharlo
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
 
           {puedeGestionarEstado && transicionesDisponibles.includes("CANCELADO") && (
             <button
@@ -385,19 +417,20 @@ export default function PanelDetallePedido({
               </button>
             )}
 
-            {puedeGestionarEstado &&
-              pedido.canal === "DELIVERY" &&
-              pedido.estado === "EN_CAMINO" && (
-                <button
-                  type="button"
-                  disabled={cargando}
-                  onClick={() => cambiarEstado("ENTREGADO")}
-                  className="w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
-                >
-                  Marcar como entregado
-                </button>
-              )}
-          </div>
+          {/* Salida de emergencia: el flujo normal es que el repartidor use el código */}
+          {puedeGestionarEstado &&
+            pedido.canal === "DELIVERY" &&
+            pedido.estado === "EN_CAMINO" && (
+              <button
+                type="button"
+                disabled={cargando}
+                onClick={forzarEntrega}
+                className="w-full rounded-xl border border-amber-300 py-2.5 text-xs font-bold text-amber-700 hover:bg-amber-50 disabled:opacity-50 dark:border-amber-500/30 dark:text-amber-400 dark:hover:bg-amber-500/10"
+              >
+                Forzar entrega (sin código)
+              </button>
+            )}
+        </div>
       )}
 
       {/* Subcomponentes Integrados */}

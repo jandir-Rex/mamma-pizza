@@ -13,7 +13,7 @@ class ItemPedido {
   }
 
   factory ItemPedido.fromJson(Map<String, dynamic> json) => ItemPedido(
-        cantidad: json["cantidad"],
+        cantidad: (json["cantidad"] as num).toInt(),
         precioUnitario: double.parse(json["precioUnitario"].toString()),
         nombre: _nombre(json),
       );
@@ -30,6 +30,12 @@ class Pedido {
   final DateTime createdAt;
   final List<ItemPedido> items;
 
+  /// Código de 4 dígitos que el cliente le dicta al repartidor.
+  /// El backend lo genera solo al pasar a EN_CAMINO.
+  final String? codigoConfirmacion;
+  final DateTime? confirmadoEn;
+  final int intentosCodigoFallidos;
+
   Pedido({
     required this.id,
     required this.codigo,
@@ -38,17 +44,30 @@ class Pedido {
     required this.total,
     required this.createdAt,
     required this.items,
+    this.codigoConfirmacion,
+    this.confirmadoEn,
+    this.intentosCodigoFallidos = 0,
   });
 
   factory Pedido.fromJson(Map<String, dynamic> json) => Pedido(
-        id: json["id"],
-        codigo: json["codigo"],
-        canal: json["canal"],
-        estado: json["estado"],
+        id: (json["id"] as num).toInt(),
+        codigo: json["codigo"].toString(),
+        canal: json["canal"].toString(),
+        estado: json["estado"].toString(),
         total: double.parse(json["total"].toString()),
-        createdAt: DateTime.parse(json["createdAt"]),
-        items: (json["items"] as List).map((i) => ItemPedido.fromJson(i)).toList(),
+        createdAt: DateTime.parse(json["createdAt"].toString()),
+        items: (json["items"] as List? ?? const [])
+            .map((i) => ItemPedido.fromJson(Map<String, dynamic>.from(i as Map)))
+            .toList(),
+        codigoConfirmacion: json["codigoConfirmacion"]?.toString(),
+        confirmadoEn: json["confirmadoEn"] != null
+            ? DateTime.tryParse(json["confirmadoEn"].toString())?.toLocal()
+            : null,
+        intentosCodigoFallidos: (json["intentosCodigoFallidos"] as num?)?.toInt() ?? 0,
       );
 
   int get cantidadItems => items.fold(0, (s, i) => s + i.cantidad);
+
+  bool get esDelivery => canal == "DELIVERY";
+  bool get activo => estado != "ENTREGADO" && estado != "CANCELADO";
 }

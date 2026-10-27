@@ -40,13 +40,25 @@ class _EntregaActivaScreenState extends State<EntregaActivaScreen> {
     if (nuevo == null) return;
     setState(() => _guardando = true);
     try {
-      await PedidosService.cambiarEstado(widget.entrega.id, nuevo);
+      final int idPedido = widget.entrega.id is int 
+          ? widget.entrega.id 
+          : int.parse(widget.entrega.id.toString());
+
+      if (nuevo == "EN_CAMINO") {
+        await PedidosService.iniciarEntrega(idPedido);
+      } else if (nuevo == "ENTREGADO") {
+        // En caso de entregarse mediante código directo
+        await PedidosService.entregarConCodigo(idPedido, widget.entrega.codigo);
+      }
+
       if (!mounted) return;
       setState(() => _estado = nuevo);
       if (nuevo == "ENTREGADO") Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst("Exception: ", ""))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst("Exception: ", ""))),
+      );
     } finally {
       if (mounted) setState(() => _guardando = false);
     }

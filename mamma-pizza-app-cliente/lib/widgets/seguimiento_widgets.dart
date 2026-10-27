@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/theme.dart';
 import '../models/pedido.dart';
+import 'codigo_entrega_card.dart';
 
 String _hora(DateTime d) {
   final l = d.toLocal();
@@ -105,6 +106,23 @@ class SeguimientoPedido extends StatelessWidget {
         if (!cancelado) ...[
           const SizedBox(height: 24),
           _Pasos(pasos: pasos, indice: indice, creado: pedido.createdAt),
+        ],
+
+        // Código de entrega (solo delivery en camino)
+        if (esDelivery && pedido.estado == "EN_CAMINO") ...[
+          const SizedBox(height: 22),
+          CodigoEntregaCard(
+            codigo: pedido.codigoConfirmacion,
+            estado: pedido.estado,
+            canal: pedido.canal,
+            intentosFallidos: pedido.intentosCodigoFallidos,
+          ),
+        ],
+
+        // Confirmación posterior a la entrega
+        if (entregado && pedido.confirmadoEn != null) ...[
+          const SizedBox(height: 22),
+          EntregaConfirmadaBanner(estado: pedido.estado, confirmadoEn: pedido.confirmadoEn),
         ],
 
         // Mapa (solo delivery en camino)
