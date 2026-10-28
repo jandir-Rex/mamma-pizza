@@ -8,7 +8,7 @@
 import SwiftUI
 
 @main
-struct mamma_pizza_iosApp: App {
+struct MammaPizzaClientApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
