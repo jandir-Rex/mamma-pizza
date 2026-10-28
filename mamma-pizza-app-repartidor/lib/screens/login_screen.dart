@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../providers/auth_provider.dart';
-import 'mis_entregas_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -19,6 +18,13 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _ocultarPassword = true;
   String? _error;
 
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    _passwordCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _manejarLogin() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() {
@@ -26,9 +32,9 @@ class _LoginScreenState extends State<LoginScreen> {
       _error = null;
     });
     try {
+      // Si el login sale bien, AuthProvider notifica y _Arrancador (main.dart)
+      // cambia solo a HomeShell. No hace falta navegar a mano.
       await context.read<AuthProvider>().login(_emailCtrl.text.trim(), _passwordCtrl.text);
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const MisEntregasScreen()));
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e.toString().replaceFirst("Exception: ", ""));
@@ -54,13 +60,20 @@ class _LoginScreenState extends State<LoginScreen> {
                     width: 84,
                     height: 84,
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [AppColors.primary, AppColors.primaryLight], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                      gradient: const LinearGradient(
+                        colors: [AppColors.primary, AppColors.primaryLight],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
                       borderRadius: BorderRadius.circular(24),
                     ),
                     child: const Center(child: Icon(Icons.delivery_dining, color: Colors.white, size: 42)),
                   ),
                   const SizedBox(height: 20),
-                  const Text("Mamma Pizza", style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.dark)),
+                  const Text(
+                    "Mamma Pizza",
+                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.dark),
+                  ),
                   const Text("App del Repartidor", style: TextStyle(color: AppColors.gray, fontSize: 13)),
                   const SizedBox(height: 36),
                   if (_error != null)
@@ -68,24 +81,36 @@ class _LoginScreenState extends State<LoginScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(color: const Color(0xFFFDECEA), borderRadius: BorderRadius.circular(12)),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFDECEA),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       child: Text(_error!, style: const TextStyle(color: AppColors.danger, fontSize: 13)),
                     ),
                   TextFormField(
                     controller: _emailCtrl,
                     keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(labelText: "Email", prefixIcon: Icon(Icons.mail_outline, size: 20)),
+                    autofillHints: const [AutofillHints.email],
+                    decoration: const InputDecoration(
+                      labelText: "Email",
+                      prefixIcon: Icon(Icons.mail_outline, size: 20),
+                    ),
                     validator: (v) => (v == null || !v.contains("@")) ? "Ingresa un email válido" : null,
                   ),
                   const SizedBox(height: 14),
                   TextFormField(
                     controller: _passwordCtrl,
                     obscureText: _ocultarPassword,
+                    autofillHints: const [AutofillHints.password],
+                    onFieldSubmitted: (_) => _cargando ? null : _manejarLogin(),
                     decoration: InputDecoration(
                       labelText: "Contraseña",
                       prefixIcon: const Icon(Icons.lock_outline, size: 20),
                       suffixIcon: IconButton(
-                        icon: Icon(_ocultarPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 20),
+                        icon: Icon(
+                          _ocultarPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                          size: 20,
+                        ),
                         onPressed: () => setState(() => _ocultarPassword = !_ocultarPassword),
                       ),
                     ),
@@ -95,7 +120,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   ElevatedButton(
                     onPressed: _cargando ? null : _manejarLogin,
                     child: _cargando
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.2))
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.2),
+                          )
                         : const Text("Ingresar"),
                   ),
                 ],

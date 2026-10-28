@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' as mb;
@@ -11,6 +12,7 @@ import '../providers/auth_provider.dart';
 import '../providers/entregas_provider.dart';
 import '../services/ruta_service.dart';
 import '../widgets/codigo_entrega_sheet.dart';
+import '../widgets/marcadores_mapa.dart';
 import '../widgets/ruta_widgets.dart';
 import '../widgets/slide_action.dart';
 
@@ -27,10 +29,10 @@ class _RutaScreenState extends State<RutaScreen> {
   static const double _hojaMax = 0.92;
 
   // El mapa se crea UNA sola vez (no se reconstruye con cada cambio del provider)
-  late final Widget _mapaWidget = mb.MapWidget(
+    late final Widget _mapaWidget = mb.MapWidget(
     key: const ValueKey("mapa-ruta"),
     styleUri: "mapbox://styles/mapbox/streets-v12",
-    cameraOptions: mb.CameraOptions(
+    viewport: mb.CameraViewportState(
       center: mb.Point(coordinates: mb.Position(-79.0215, -8.1091)), // Trujillo
       zoom: 13.5,
     ),
@@ -39,15 +41,33 @@ class _RutaScreenState extends State<RutaScreen> {
 
   mb.MapboxMap? _mapaCtrl;
   mb.PolylineAnnotationManager? _lineas;
-  mb.CircleAnnotationManager? _circulos;
+  mb.PointAnnotationManager? _puntos;
+  mb.PointAnnotation? _moto;
+
+  // Imágenes de marcadores (se generan una vez y se cachean)
+  Uint8List? _bytesMoto;
+  final Map<String, Uint8List> _bytesDestino = {};
 
   int? _seleccionId;
   int? _entregaIdRuta;
   RutaInfo? _ruta;
   mb.Position? _destino;
+  String _etiquetaDestino = "";
   double? _origenLat;
   double? _origenLng;
+  double? _motoLat;
+  double? _motoLng;
   bool _calculando = false;
+  bool _creandoMoto = false;
+
+  /// Fracción de pantalla que ocupa la hoja (para pegar el botón de recentrar encima)
+  final ValueNotifier<double> _extentHoja = ValueNotifier(_hojaInicial);
+
+  @override
+  void dispose() {
+    _extentHoja.dispose();
+    super.dispose();
+  }
 
   // ---------------------------------------------------------------- Mapa
 
@@ -55,65 +75,90 @@ class _RutaScreenState extends State<RutaScreen> {
     _mapaCtrl = mapa;
     try {
       _lineas = await mapa.annotations.createPolylineAnnotationManager();
-      _circulos = await mapa.annotations.createCircleAnnotationManager();
-      await mapa.location.updateSettings(
-        mb.LocationComponentSettings(
-          enabled: true,
-          pulsingEnabled: true,
-          pulsingColor: AppColors.primary.toARGB32(),
-        ),
-      );
+      _puntos = await mapa.annotations.createPointAnnotationManager();
       await mapa.scaleBar.updateSettings(mb.ScaleBarSettings(enabled: false));
       await mapa.compass.updateSettings(mb.CompassSettings(enabled: false));
-    } catch (_) {
-      // Si el permiso de ubicación no está dado, el mapa igual funciona sin el punto azul
-    }
+    } catch (_) {}
     await _pintar();
   }
 
   Future<void> _pintar() async {
     final lineas = _lineas;
-    final circulos = _circulos;
-    if (lineas == null || circulos == null || !mounted) return;
+    final puntos = _puntos;
+    if (lineas == null || puntos == null || !mounted) return;
 
     try {
       await lineas.deleteAll();
-      await circulos.deleteAll();
+      await puntos.deleteAll();
+      _moto = null;
+      _motoLat = null;
+      _motoLng = null;
 
       final destino = _destino;
-      if (destino == null) return;
+      if (destino != null) {
+        final ruta = _ruta;
+        if (ruta != null && ruta.puntos.length > 1) {
+          // Borde blanco + línea de marca encima: se lee bien sobre cualquier calle
+          await lineas.create(mb.PolylineAnnotationOptions(
+            geometry: mb.LineString(coordinates: ruta.puntos),
+            lineColor: Colors.white.toARGB32(),
+            lineWidth: 10,
+          ));
+          await lineas.create(mb.PolylineAnnotationOptions(
+            geometry: mb.LineString(coordinates: ruta.puntos),
+            lineColor: AppColors.primary.toARGB32(),
+            lineWidth: 6,
+          ));
+        }
 
-      final ruta = _ruta;
-      if (ruta != null && ruta.puntos.length > 1) {
-        // Borde blanco + línea de marca encima: se lee bien sobre cualquier calle
-        await lineas.create(mb.PolylineAnnotationOptions(
-          geometry: mb.LineString(coordinates: ruta.puntos),
-          lineColor: Colors.white.toARGB32(),
-          lineWidth: 10,
-        ));
-        await lineas.create(mb.PolylineAnnotationOptions(
-          geometry: mb.LineString(coordinates: ruta.puntos),
-          lineColor: AppColors.primary.toARGB32(),
-          lineWidth: 6,
+        // Pin rojo con la etiqueta oscura de la dirección (como en el mockup)
+        final etiqueta = _etiquetaDestino;
+        final bytes = _bytesDestino[etiqueta] ?? await MarcadoresMapa.destino(etiqueta);
+        _bytesDestino[etiqueta] = bytes;
+        await puntos.create(mb.PointAnnotationOptions(
+          geometry: mb.Point(coordinates: destino),
+          image: bytes,
+          iconSize: 1 / MarcadoresMapa.escala,
+          iconAnchor: mb.IconAnchor.BOTTOM,
         ));
       }
-
-      await circulos.create(mb.CircleAnnotationOptions(
-        geometry: mb.Point(coordinates: destino),
-        circleRadius: 24,
-        circleColor: AppColors.primary.toARGB32(),
-        circleOpacity: 0.18,
-      ));
-      await circulos.create(mb.CircleAnnotationOptions(
-        geometry: mb.Point(coordinates: destino),
-        circleRadius: 9,
-        circleColor: AppColors.primary.toARGB32(),
-        circleStrokeColor: Colors.white.toARGB32(),
-        circleStrokeWidth: 3.5,
-      ));
     } catch (_) {}
 
+    await _moverMoto();
     await _encuadrar();
+  }
+
+  /// Crea o mueve el marcador de moto a la posición actual del repartidor
+  Future<void> _moverMoto() async {
+    final puntos = _puntos;
+    if (puntos == null || !mounted || _creandoMoto) return;
+    final prov = context.read<EntregasProvider>();
+    final lat = prov.lat;
+    final lng = prov.lng;
+    if (lat == null || lng == null) return;
+
+    _creandoMoto = true;
+    try {
+      final posicion = mb.Point(coordinates: mb.Position(lng, lat));
+      final actual = _moto;
+      if (actual == null) {
+        final bytes = _bytesMoto ?? await MarcadoresMapa.repartidor();
+        _bytesMoto = bytes;
+        _moto = await puntos.create(mb.PointAnnotationOptions(
+          geometry: posicion,
+          image: bytes,
+          iconSize: 1 / MarcadoresMapa.escala,
+        ));
+      } else {
+        actual.geometry = posicion;
+        await puntos.update(actual);
+      }
+      _motoLat = lat;
+      _motoLng = lng;
+    } catch (_) {
+    } finally {
+      _creandoMoto = false;
+    }
   }
 
   /// Centra el mapa para que se vea la ruta completa en la zona NO tapada por la hoja
@@ -165,7 +210,15 @@ class _RutaScreenState extends State<RutaScreen> {
     } catch (_) {}
   }
 
-  // ---------------------------------------------------------------- Ruta
+  // ---------------------------------------------------------------- Ruta y marcador
+
+  void _programarMoto(EntregasProvider prov) {
+    final lat = prov.lat;
+    final lng = prov.lng;
+    if (lat == null || lng == null || _puntos == null) return;
+    if (_motoLat != null && distanciaMetros(_motoLat!, _motoLng!, lat, lng) < 8) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _moverMoto());
+  }
 
   void _programarRuta(Entrega? sel, EntregasProvider prov) {
     if (sel == null) {
@@ -197,6 +250,8 @@ class _RutaScreenState extends State<RutaScreen> {
     _calculando = true;
     _entregaIdRuta = sel.id;
     _destino = mb.Position(dir.lng, dir.lat);
+    // "Calle B33, La Esperanza, ..." -> "Calle B33"
+    _etiquetaDestino = dir.zona.split(',').first.trim();
     WidgetsBinding.instance.addPostFrameCallback((_) => _calcularRuta(lat, lng));
   }
 
@@ -307,56 +362,67 @@ class _RutaScreenState extends State<RutaScreen> {
     final activas = prov.activas;
     final sel = _seleccionada(activas);
     _programarRuta(sel, prov);
+    _programarMoto(prov);
+
+    final primerNombre = nombre.trim().split(' ').first;
 
     return Column(
       children: [
         Expanded(
-          child: Stack(
-            children: [
-              Positioned.fill(child: _mapaWidget),
+          child: LayoutBuilder(
+            builder: (context, c) => Stack(
+              children: [
+                Positioned.fill(child: _mapaWidget),
 
-              // Cabecera + ETA flotando sobre el mapa
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: SafeArea(
-                  bottom: false,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
-                    child: Column(
-                      children: [
-                        _CabeceraRuta(
-                          nombre: nombre,
-                          estado: sel?.estaEnCamino == true
-                              ? PildoraEstado(texto: "En entrega", color: AppColors.primary)
-                              : prov.disponible
-                                  ? PildoraEstado(texto: "Disponible", color: AppColors.success)
-                                  : const PildoraEstado(texto: "En pausa", color: AppColors.gray),
-                          onSos: _mostrarSos,
-                        ),
-                        if (sel?.direccion != null) ...[
-                          const SizedBox(height: 10),
-                          TarjetaEta(
-                            ruta: _ruta,
-                            calculando: _calculando,
-                            tieneUbicacion: prov.lat != null,
-                            destino: sel!.direccion!,
+                // Cabecera + ETA flotando sobre el mapa
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: SafeArea(
+                    bottom: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+                      child: Column(
+                        children: [
+                          _CabeceraRuta(
+                            subtitulo: "$primerNombre · Trujillo Central",
+                            estado: sel?.estaEnCamino == true
+                                ? const PildoraEstado(texto: "En entrega", color: AppColors.primary)
+                                : prov.disponible
+                                    ? const PildoraEstado(texto: "Disponible", color: AppColors.success)
+                                    : const PildoraEstado(texto: "En pausa", color: AppColors.gray),
+                            onMenu: () => Scaffold.of(context).openDrawer(),
+                            onSos: _mostrarSos,
                           ),
+                          if (sel?.direccion != null) ...[
+                            const SizedBox(height: 10),
+                            TarjetaEta(
+                              ruta: _ruta,
+                              calculando: _calculando,
+                              tieneUbicacion: prov.lat != null,
+                              destino: sel!.direccion!,
+                            ),
+                          ],
                         ],
-                        const SizedBox(height: 10),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: BotonRedondo(icono: Icons.my_location_rounded, onTap: _encuadrar),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
-              ),
 
-              if (sel != null) _hoja(sel, activas) else _PanelEspera(prov: prov, onAviso: _aviso),
-            ],
+                if (sel != null) _hoja(sel, activas) else _PanelEspera(prov: prov, onAviso: _aviso),
+
+                // Botón de recentrar: sube y baja pegado al borde superior de la hoja
+                ValueListenableBuilder<double>(
+                  valueListenable: _extentHoja,
+                  builder: (_, extent, __) => Positioned(
+                    right: 14,
+                    bottom: sel != null ? c.maxHeight * extent + 12 : 340,
+                    child: BotonRedondo(icono: Icons.my_location_rounded, onTap: _encuadrar),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         if (sel != null) _barraAccion(sel),
@@ -370,62 +436,68 @@ class _RutaScreenState extends State<RutaScreen> {
     final puedeSoltar = e.estaConfirmado || e.estaEnPreparacion;
 
     return Positioned.fill(
-      child: DraggableScrollableSheet(
-        key: const ValueKey("hoja-entrega"),
-        initialChildSize: _hojaInicial,
-        minChildSize: _hojaMin,
-        maxChildSize: _hojaMax,
-        snap: true,
-        snapSizes: const [_hojaMin, _hojaInicial, _hojaMax],
-        builder: (context, scroll) {
-          return Container(
-            decoration: BoxDecoration(
-              color: AppColors.bg,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-              boxShadow: AppShadows.hoja,
-            ),
-            child: ListView(
-              controller: scroll,
-              padding: const EdgeInsets.fromLTRB(18, 10, 18, 28),
-              children: [
-                Center(
-                  child: Container(
-                    width: 44,
-                    height: 5,
-                    decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(3)),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                if (activas.length > 1) ...[
-                  _selectorEntregas(activas, e),
-                  const SizedBox(height: 14),
-                ],
-                _encabezadoComanda(e),
-                const SizedBox(height: 16),
-                ProgresoEntrega(estado: e.estado),
-                const SizedBox(height: 16),
-                if (puedeSoltar) ...[
-                  _avisoRecojo(e),
-                  const SizedBox(height: 12),
-                ],
-                TarjetaCobro(key: ValueKey("cobro-${e.id}"), entrega: e),
-                const SizedBox(height: 12),
-                TarjetaCliente(entrega: e),
-                const SizedBox(height: 12),
-                ListaPedido(entrega: e),
-                if (puedeSoltar)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: TextButton.icon(
-                      onPressed: () => _soltar(e),
-                      icon: const Icon(Icons.undo_rounded, size: 18, color: AppColors.gray),
-                      label: const Text("Soltar este pedido", style: TextStyle(color: AppColors.gray, fontWeight: FontWeight.w600)),
+      child: NotificationListener<DraggableScrollableNotification>(
+        onNotification: (n) {
+          _extentHoja.value = n.extent;
+          return false;
+        },
+        child: DraggableScrollableSheet(
+          key: const ValueKey("hoja-entrega"),
+          initialChildSize: _hojaInicial,
+          minChildSize: _hojaMin,
+          maxChildSize: _hojaMax,
+          snap: true,
+          snapSizes: const [_hojaMin, _hojaInicial, _hojaMax],
+          builder: (context, scroll) {
+            return Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                boxShadow: AppShadows.hoja,
+              ),
+              child: ListView(
+                controller: scroll,
+                padding: const EdgeInsets.fromLTRB(18, 10, 18, 28),
+                children: [
+                  Center(
+                    child: Container(
+                      width: 44,
+                      height: 5,
+                      decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(3)),
                     ),
                   ),
-              ],
-            ),
-          );
-        },
+                  const SizedBox(height: 14),
+                  if (activas.length > 1) ...[
+                    _selectorEntregas(activas, e),
+                    const SizedBox(height: 14),
+                  ],
+                  _encabezadoComanda(e),
+                  const SizedBox(height: 16),
+                  ProgresoEntrega(estado: e.estado),
+                  const SizedBox(height: 16),
+                  if (puedeSoltar) ...[
+                    _avisoRecojo(e),
+                    const SizedBox(height: 12),
+                  ],
+                  TarjetaCobro(key: ValueKey("cobro-${e.id}"), entrega: e),
+                  const SizedBox(height: 12),
+                  TarjetaCliente(entrega: e),
+                  const SizedBox(height: 12),
+                  ListaPedido(entrega: e),
+                  if (puedeSoltar)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: TextButton.icon(
+                        onPressed: () => _soltar(e),
+                        icon: const Icon(Icons.undo_rounded, size: 18, color: AppColors.gray),
+                        label: const Text("Soltar este pedido", style: TextStyle(color: AppColors.gray, fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -513,8 +585,10 @@ class _RutaScreenState extends State<RutaScreen> {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             const Text("Despacho", style: TextStyle(fontSize: 11, color: AppColors.gray)),
-            Text("${hora(e.creadoEn)} hrs", style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
-            Text(haceCuanto(e.creadoEn), style: const TextStyle(fontSize: 11, color: AppColors.gray)),
+            Text(
+              "${hora(e.creadoEn)} hrs (${haceCuanto(e.creadoEn)})",
+              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800),
+            ),
           ],
         ),
       ],
@@ -592,42 +666,65 @@ class _RutaScreenState extends State<RutaScreen> {
 }
 
 // ===========================================================================
-// Cabecera flotante
+// Cabecera flotante (como el mockup: menú · título · estado · SOS)
 // ===========================================================================
 class _CabeceraRuta extends StatelessWidget {
-  final String nombre;
+  final String subtitulo;
   final Widget estado;
+  final VoidCallback onMenu;
   final VoidCallback onSos;
-  const _CabeceraRuta({required this.nombre, required this.estado, required this.onSos});
+  const _CabeceraRuta({
+    required this.subtitulo,
+    required this.estado,
+    required this.onMenu,
+    required this.onSos,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final primerNombre = nombre.trim().split(' ').first;
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.95),
+        color: Colors.white.withValues(alpha: 0.96),
         borderRadius: BorderRadius.circular(22),
         boxShadow: AppShadows.floating,
       ),
       child: Row(
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(gradient: AppGradients.brand, borderRadius: BorderRadius.circular(14)),
-            child: const Icon(Icons.delivery_dining_rounded, color: Colors.white, size: 26),
+          Material(
+            color: const Color(0xFFF1ECE6),
+            borderRadius: BorderRadius.circular(14),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: onMenu,
+              child: const SizedBox(
+                width: 44,
+                height: 44,
+                child: Icon(Icons.menu_rounded, color: AppColors.dark, size: 24),
+              ),
+            ),
           ),
           const SizedBox(width: 11),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("Mamma Pizza Delivery", maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.primary)),
-                Text("Hola, $primerNombre · Trujillo", maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11.5, color: AppColors.gray)),
+                const Text(
+                  "Mamma Pizza\nDelivery",
+                  maxLines: 2,
+                  style: TextStyle(fontSize: 16, height: 1.1, fontWeight: FontWeight.w800, color: AppColors.primaryDark),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitulo,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 10.5, color: AppColors.gray, fontWeight: FontWeight.w600),
+                ),
               ],
             ),
           ),
+          const SizedBox(width: 6),
           estado,
           const SizedBox(width: 8),
           Material(
@@ -637,7 +734,7 @@ class _CabeceraRuta extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               onTap: onSos,
               child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+                padding: EdgeInsets.symmetric(horizontal: 11, vertical: 10),
                 child: Text("SOS", style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w900, fontSize: 12.5)),
               ),
             ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../core/theme.dart';
 import '../core/utils.dart';
 import '../models/entrega.dart';
@@ -89,18 +90,24 @@ class PildoraEstado extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
       decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(20)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 8,
-            height: 8,
+            width: 12,
+            height: 12,
             decoration: BoxDecoration(
-              color: Colors.white,
               shape: BoxShape.circle,
-              boxShadow: [BoxShadow(color: Colors.white.withValues(alpha: 0.6), blurRadius: 6)],
+              border: Border.all(color: Colors.white.withValues(alpha: 0.75), width: 2),
+            ),
+            child: Center(
+              child: Container(
+                width: 4,
+                height: 4,
+                decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+              ),
             ),
           ),
           const SizedBox(width: 7),
@@ -132,7 +139,7 @@ class TarjetaEta extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.95),
+        color: Colors.white.withValues(alpha: 0.96),
         borderRadius: BorderRadius.circular(20),
         boxShadow: AppShadows.floating,
       ),
@@ -158,7 +165,7 @@ class TarjetaEta extends StatelessWidget {
           const SizedBox(width: 6),
           _MiniBoton(
             texto: "Waze",
-            icono: Icons.near_me_rounded,
+            icono: Icons.explore_rounded,
             oscuro: true,
             onTap: () => abrirWaze(destino.lat, destino.lng),
           ),
@@ -168,21 +175,34 @@ class TarjetaEta extends StatelessWidget {
   }
 
   Widget _contenido() {
-    if (ruta != null) {
+    final r = ruta;
+    if (r != null) {
+      final via = r.via != null ? " por ${r.via}" : "";
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(ruta!.minutos, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, height: 1.1)),
-              const SizedBox(width: 6),
-              Text("(${ruta!.km})", style: const TextStyle(color: AppColors.gray, fontSize: 12.5)),
-            ],
+          // FittedBox: si no cabe junto a los botones Maps/Waze, el texto se encoge en vez de desbordar
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(r.minutos, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, height: 1.1)),
+                const SizedBox(width: 6),
+                Text("(${r.km})", style: const TextStyle(color: AppColors.gray, fontSize: 12.5)),
+              ],
+            ),
           ),
-          const Text("Ruta con tráfico actual", style: TextStyle(color: AppColors.gray, fontSize: 11.5)),
+          Text(
+            "${r.trafico}$via",
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: AppColors.gray, fontSize: 11.5, fontWeight: FontWeight.w600),
+          ),
         ],
       );
     }
@@ -215,13 +235,13 @@ class _MiniBoton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: oscuro ? AppColors.dark : Colors.white,
+      color: oscuro ? AppColors.primaryDark : Colors.white,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             border: oscuro ? null : Border.all(color: AppColors.border),
@@ -415,20 +435,21 @@ class _TarjetaCobroState extends State<TarjetaCobro> {
           const SizedBox(height: 10),
           Row(
             children: [
-              const Text("Paga con", style: TextStyle(fontSize: 12.5, color: AppColors.gray, fontWeight: FontWeight.w600)),
+              const Text("Paga con:", style: TextStyle(fontSize: 12.5, color: AppColors.gray, fontWeight: FontWeight.w600)),
               const SizedBox(width: 10),
               SizedBox(
-                width: 112,
+                width: 118,
                 child: TextField(
                   controller: _ctrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   onChanged: (_) => setState(() {}),
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                  decoration: const InputDecoration(
+                  style: GoogleFonts.spaceMono(fontWeight: FontWeight.w700, fontSize: 13.5),
+                  decoration: InputDecoration(
                     isDense: true,
                     prefixText: "S/. ",
+                    prefixStyle: GoogleFonts.spaceMono(fontWeight: FontWeight.w700, fontSize: 13.5),
                     hintText: "0.00",
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   ),
                 ),
               ),
@@ -445,11 +466,15 @@ class _TarjetaCobroState extends State<TarjetaCobro> {
     final falta = vuelto < 0;
     final color = falta ? AppColors.warning : AppColors.danger;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(color: color.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(10)),
       child: Text(
         falta ? "Falta ${soles(-vuelto)}" : "Vuelto: ${soles(vuelto)}",
-        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: falta ? const Color(0xFF7A5600) : AppColors.danger),
+        style: GoogleFonts.spaceMono(
+          fontSize: 11.5,
+          fontWeight: FontWeight.w700,
+          color: falta ? const Color(0xFF7A5600) : AppColors.danger,
+        ),
       ),
     );
   }
@@ -493,60 +518,92 @@ class _TarjetaCobroState extends State<TarjetaCobro> {
 }
 
 // ---------------------------------------------------------------------------
-// Cliente + destino + botón llamar
+// Cliente + destino + botón llamar (estilo mockup: fondo lavanda, avatar rosado)
 // ---------------------------------------------------------------------------
 class TarjetaCliente extends StatelessWidget {
   final Entrega entrega;
   const TarjetaCliente({super.key, required this.entrega});
 
+  String get _subtitulo {
+    final dir = entrega.direccion;
+    if (dir == null) return "Cliente";
+    final corta = dir.zona.split(',').first.trim();
+    final ref = dir.referencia?.trim();
+    return (ref != null && ref.isNotEmpty) ? "$corta ($ref)" : corta;
+  }
+
   @override
   Widget build(BuildContext context) {
     final e = entrega;
-    final dir = e.direccion;
     final telefono = e.clienteTelefono;
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFFF1F4FF),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppShadows.soft,
+        border: Border.all(color: const Color(0xFFDDE3FA)),
       ),
       child: Row(
         children: [
           Container(
-            width: 50,
-            height: 50,
-            decoration: const BoxDecoration(gradient: AppGradients.brand, shape: BoxShape.circle),
+            width: 52,
+            height: 52,
+            decoration: const BoxDecoration(color: Color(0xFFFFDAD4), shape: BoxShape.circle),
             alignment: Alignment.center,
-            child: Text(iniciales(e.clienteNombre), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 17)),
+            child: Text(
+              iniciales(e.clienteNombre),
+              style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w800, fontSize: 17),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(e.clienteNombre ?? "Cliente", maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-                if (dir != null) ...[
-                  const SizedBox(height: 3),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.only(top: 2),
-                        child: Icon(Icons.place_rounded, size: 14, color: AppColors.primary),
+                Text(
+                  e.clienteNombre ?? "Cliente",
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    const Icon(Icons.verified_rounded, size: 13, color: AppColors.gray),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        _subtitulo,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12, color: AppColors.gray, fontWeight: FontWeight.w600),
                       ),
-                      const SizedBox(width: 3),
-                      Expanded(child: Text(dir.zona, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600))),
-                    ],
-                  ),
-                  if (dir.referencia != null && dir.referencia!.trim().isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 17, top: 1),
-                      child: Text(dir.referencia!, style: const TextStyle(fontSize: 11.5, color: AppColors.gray, fontStyle: FontStyle.italic)),
                     ),
-                ],
+                  ],
+                ),
+                if (e.direccion != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 3),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.only(top: 1),
+                          child: Icon(Icons.place_rounded, size: 13, color: AppColors.primary),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            e.direccion!.zona,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 11.5, color: AppColors.gray),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),
@@ -646,7 +703,7 @@ class ListaPedido extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Switch de disponibilidad (se reutiliza en la pantalla de espera y en el perfil)
+// Switch de disponibilidad (se reutiliza en la pantalla de espera, el perfil y el menú)
 // ---------------------------------------------------------------------------
 class TarjetaDisponibilidad extends StatelessWidget {
   final EntregasProvider prov;
