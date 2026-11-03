@@ -80,9 +80,9 @@ function emitDisponibilidadCambiada(variante) {
   io.emit("producto:disponibilidad", variante);
 }
 
-function emitProductosCambiados() {
+function emitProductosCambiados(datos = { accion: "recargar" }) {
   if (!io) return;
-  io.emit("productos:cambiado");
+  io.emit("productos:cambiado", datos);
 }
 
 function emitirCambioAutorizacion(usuarioId) {

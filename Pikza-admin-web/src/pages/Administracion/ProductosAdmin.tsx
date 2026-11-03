@@ -47,8 +47,23 @@ export default function ProductosAdmin() {
     const recargar = () => {
       cargarDatos(true);
     };
+    const alCambiar = (datos?: { accion?: string; id?: number; producto?: Producto }) => {
+      const id = datos?.id;
+      const nuevo = datos?.producto;
+      if (datos?.accion === "eliminar" && id) {
+        setProductos((prev) => prev.filter((p) => p.id !== id));
+      } else if (datos?.accion === "guardar" && nuevo) {
+        setProductos((prev) =>
+          [...prev.filter((p) => p.id !== nuevo.id), nuevo].sort((a, b) =>
+            a.nombre.localeCompare(b.nombre, "es")
+          )
+        );
+      } else {
+        recargar();
+      }
+    };
     const socket = obtenerSocket() ?? conectarSocket();
-    socket?.on("productos:cambiado", recargar);
+    socket?.on("productos:cambiado", alCambiar);
     socket?.on("producto:disponibilidad", recargar);
     socket?.on("connect", recargar);
 
@@ -56,7 +71,7 @@ export default function ProductosAdmin() {
     const intervalo = setInterval(recargar, 30000);
 
     return () => {
-      socket?.off("productos:cambiado", recargar);
+      socket?.off("productos:cambiado", alCambiar);
       socket?.off("producto:disponibilidad", recargar);
       socket?.off("connect", recargar);
       clearInterval(intervalo);

@@ -12,6 +12,7 @@ export function conectarSocket() {
   socket?.disconnect();
   socket = io(import.meta.env.VITE_SOCKET_URL ?? API_ORIGIN, {
     auth: { token },
+    transports: ["websocket", "polling"],
   });
   socket.on("auth:changed", () => {
     window.dispatchEvent(new Event("auth:changed"));

@@ -7,13 +7,35 @@ const { emitProductosCambiados } = require("../../sockets");
 
 const router = Router();
 
-// Tiempo real: cada cambio exitoso (POST/PUT/PATCH/DELETE) avisa a todos los paneles conectados
+// Tiempo real: cada cambio exitoso avisa a todos los paneles, enviando el producto ya actualizado
 router.use((req, res, next) => {
-  if (req.method !== "GET") {
-    res.on("finish", () => {
-      if (res.statusCode < 400) emitProductosCambiados();
-    });
-  }
+  if (req.method === "GET") return next();
+
+  let cuerpo;
+  const enviarJson = res.json.bind(res);
+  res.json = (data) => {
+    cuerpo = data;
+    return enviarJson(data);
+  };
+
+  res.on("finish", () => {
+    if (res.statusCode >= 400) return;
+    const esProducto = /^\/\d+$/.test(req.path);
+
+    if (esProducto && req.method === "DELETE") {
+      return emitProductosCambiados({ accion: "eliminar", id: Number(req.path.slice(1)) });
+    }
+    if ((esProducto || req.path === "/") && cuerpo && cuerpo.id) {
+      const producto = JSON.parse(JSON.stringify(cuerpo));
+      return emitProductosCambiados(
+        producto.disponible === false
+          ? { accion: "eliminar", id: producto.id }
+          : { accion: "guardar", id: producto.id, producto }
+      );
+    }
+    emitProductosCambiados({ accion: "recargar" });
+  });
+
   next();
 });
 
