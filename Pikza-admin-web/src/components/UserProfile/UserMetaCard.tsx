@@ -109,6 +109,7 @@ export default function UserMetaCard() {
       const stored = JSON.parse(localStorage.getItem("usuario") ?? "{}");
       stored.fotoUrl = guardada;
       localStorage.setItem("usuario", JSON.stringify(stored));
+      window.dispatchEvent(new Event("perfil:actualizado"));
     } catch (err) {
       setErrorFoto(err instanceof Error ? err.message : "No se pudo guardar la foto");
     } finally {

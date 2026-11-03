@@ -91,6 +91,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [usuario?.id]);
 
+  // Cuando Mi Perfil cambia la foto, refresca el usuario al instante (sin esperar la sincronizacion)
+  useEffect(() => {
+    function alActualizarPerfil() {
+      const guardado = usuarioGuardado();
+      if (guardado) setUsuario(guardado);
+    }
+    window.addEventListener("perfil:actualizado", alActualizarPerfil);
+    return () => window.removeEventListener("perfil:actualizado", alActualizarPerfil);
+  }, []);
+
   async function login(email: string, password: string) {
     const data = await apiRequest<{
       token: string;

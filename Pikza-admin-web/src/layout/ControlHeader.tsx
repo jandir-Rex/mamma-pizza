@@ -51,13 +51,26 @@ export default function ControlHeader() {
         {/* Clic en tu nombre te lleva directo a la página de tu perfil */}
         <Link
           to="/perfil"
-          className="hidden min-w-0 rounded-xl px-3 py-1.5 text-right transition hover:bg-gray-100 sm:block dark:hover:bg-gray-800"
+          className="hidden min-w-0 items-center gap-3 rounded-xl px-3 py-1.5 text-right transition hover:bg-gray-100 sm:flex dark:hover:bg-gray-800"
           title="Ver y editar mi perfil"
         >
-          <p className="max-w-40 truncate text-sm font-bold text-gray-900 dark:text-white">
-            {usuario?.nombre}
-          </p>
-          <p className="text-xs font-semibold text-brand-500">{rolTexto}</p>
+          <div className="min-w-0">
+            <p className="max-w-40 truncate text-sm font-bold text-gray-900 dark:text-white">
+              {usuario?.nombre}
+            </p>
+            <p className="text-xs font-semibold text-brand-500">{rolTexto}</p>
+          </div>
+          {usuario?.fotoUrl ? (
+            <img
+              src={usuario.fotoUrl}
+              alt={usuario.nombre}
+              className="size-9 shrink-0 rounded-full object-cover"
+            />
+          ) : (
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-500 text-sm font-black text-white">
+              {usuario?.nombre?.trim().charAt(0).toUpperCase() || "?"}
+            </div>
+          )}
         </Link>
 
         <button
