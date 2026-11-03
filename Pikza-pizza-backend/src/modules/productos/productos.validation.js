@@ -1,29 +1,36 @@
 const { z } = require("zod");
 
 const varianteSchema = z.object({
-  tamano: z.string().min(1, "El tamaño es requerido"),
+  tamano: z.string().min(1, "El tamaÃ±o es requerido"),
   precio: z.number().positive("El precio debe ser mayor a 0"),
 });
 
 const crearProductoSchema = z.object({
   nombre: z.string().min(2, "El nombre es muy corto"),
   descripcion: z.string().optional(),
-  categoriaId: z.number().int().positive("Categoría inválida"),
+  categoriaId: z.number().int().positive("CategorÃ­a invÃ¡lida"),
   imagenUrl: z.string().url().optional(),
-  variantes: z.array(varianteSchema).min(1, "Debe tener al menos una variante/tamaño"),
+  variantes: z.array(varianteSchema).min(1, "Debe tener al menos una variante/tamaÃ±o"),
+});
+
+const varianteActualizarSchema = z.object({
+  id: z.number().int().positive().optional(),
+  tamano: z.string().min(1, "El tamaÃ±o es requerido"),
+  precio: z.number().positive("El precio debe ser mayor a 0"),
 });
 
 const actualizarProductoSchema = z.object({
   nombre: z.string().min(2).optional(),
-  descripcion: z.string().optional(),
+  descripcion: z.string().nullable().optional(),
   categoriaId: z.number().int().positive().optional(),
-  imagenUrl: z.string().url().optional(),
+  imagenUrl: z.string().url().nullable().optional(),
   disponible: z.boolean().optional(),
+  variantes: z.array(varianteActualizarSchema).min(1, "Debe tener al menos una variante/tamaÃ±o").optional(),
 });
 
 const crearCategoriaSchema = z.object({
   nombre: z.string().min(2, "El nombre es muy corto"),
-  parentId: z.number().int().positive("Categoría principal inválida").nullable().optional(),
+  parentId: z.number().int().positive("CategorÃ­a principal invÃ¡lida").nullable().optional(),
   areaPreparacion: z.enum(["HORNO", "BARRA"]).nullable().optional(),
 });
 

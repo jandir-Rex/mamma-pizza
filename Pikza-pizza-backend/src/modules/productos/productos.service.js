@@ -4,12 +4,12 @@ async function crearCategoria({ nombre, parentId = null, areaPreparacion = null 
   if (parentId !== null) {
     const padre = await prisma.categoria.findUnique({ where: { id: parentId } });
     if (!padre) {
-      const error = new Error("La categoría principal indicada no existe");
+      const error = new Error("La categorÃ­a principal indicada no existe");
       error.status = 400;
       throw error;
     }
     if (padre.parentId !== null) {
-      const error = new Error("Las subcategorías solo pueden depender de una categoría principal");
+      const error = new Error("Las subcategorÃ­as solo pueden depender de una categorÃ­a principal");
       error.status = 400;
       throw error;
     }
@@ -21,7 +21,7 @@ async function crearCategoria({ nombre, parentId = null, areaPreparacion = null 
 async function actualizarAreaCategoria(id, areaPreparacion) {
   const categoria = await prisma.categoria.findUnique({ where: { id } });
   if (!categoria) {
-    const error = new Error("La categoría indicada no existe");
+    const error = new Error("La categorÃ­a indicada no existe");
     error.status = 404;
     throw error;
   }
@@ -39,7 +39,7 @@ async function listarCategorias() {
 async function crearProducto({ nombre, descripcion, categoriaId, imagenUrl, variantes }) {
   const categoria = await prisma.categoria.findUnique({ where: { id: categoriaId } });
   if (!categoria) {
-    const error = new Error("La categoría indicada no existe");
+    const error = new Error("La categorÃ­a indicada no existe");
     error.status = 400;
     throw error;
   }
@@ -107,16 +107,57 @@ async function actualizarProducto(id, datos) {
   if (datos.categoriaId) {
     const categoria = await prisma.categoria.findUnique({ where: { id: datos.categoriaId } });
     if (!categoria) {
-      const error = new Error("La categoría indicada no existe");
+      const error = new Error("La categorÃ­a indicada no existe");
       error.status = 400;
       throw error;
     }
   }
 
-  return prisma.producto.update({
-    where: { id },
-    data: datos,
-    include: { categoria: { include: { padre: true } }, variantes: true },
+  const { variantes, ...datosProducto } = datos;
+
+  return prisma.$transaction(async (tx) => {
+    if (Object.keys(datosProducto).length > 0) {
+      await tx.producto.update({ where: { id }, data: datosProducto });
+    }
+
+    if (variantes) {
+      const existentes = await tx.productoVariante.findMany({ where: { productoId: id } });
+      const idsEnviados = variantes.filter((v) => v.id).map((v) => v.id);
+
+      for (const v of variantes) {
+        if (v.id) {
+          if (!existentes.some((e) => e.id === v.id)) {
+            const error = new Error(`La variante ${v.id} no pertenece a este producto`);
+            error.status = 400;
+            throw error;
+          }
+          await tx.productoVariante.update({
+            where: { id: v.id },
+            data: { tamano: v.tamano, precio: v.precio },
+          });
+        } else {
+          await tx.productoVariante.create({
+            data: { productoId: id, tamano: v.tamano, precio: v.precio },
+          });
+        }
+      }
+
+      // Variantes quitadas: se borran si no tienen historial; si tienen pedidos, se ocultan
+      for (const e of existentes.filter((e) => !idsEnviados.includes(e.id))) {
+        const usos = await tx.pedidoItem.count({ where: { productoVarianteId: e.id } });
+        if (usos === 0) {
+          await tx.disponibilidadDiaria.deleteMany({ where: { productoVarianteId: e.id } });
+          await tx.productoVariante.delete({ where: { id: e.id } });
+        } else {
+          await tx.productoVariante.update({ where: { id: e.id }, data: { disponible: false } });
+        }
+      }
+    }
+
+    return tx.producto.findUnique({
+      where: { id },
+      include: { categoria: { include: { padre: true } }, variantes: true },
+    });
   });
 }
 
