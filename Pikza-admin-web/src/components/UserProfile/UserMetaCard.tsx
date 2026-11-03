@@ -96,21 +96,34 @@ export default function UserMetaCard() {
     });
   }
 
+  // Cambia la foto a la vez en la tarjeta y en la cabecera (mismo instante)
+  function aplicarFoto(valor: string | null) {
+    setFoto(valor);
+    try {
+      const stored = JSON.parse(localStorage.getItem("usuario") ?? "{}");
+      stored.fotoUrl = valor;
+      localStorage.setItem("usuario", JSON.stringify(stored));
+    } catch {
+      // si el almacenamiento falla, igual se ve en esta pantalla
+    }
+    window.dispatchEvent(new Event("perfil:actualizado"));
+  }
+
   async function guardarFoto(nueva: string | null) {
+    const anterior = foto;
     setSubiendoFoto(true);
     setErrorFoto("");
+    // Se muestra de inmediato; el servidor confirma despues
+    aplicarFoto(nueva);
     try {
       const actualizado = await apiRequest<PerfilActualizado>("/auth/perfil", {
         method: "PATCH",
         body: JSON.stringify({ fotoUrl: nueva }),
       });
-      const guardada = actualizado.fotoUrl ?? null;
-      setFoto(guardada);
-      const stored = JSON.parse(localStorage.getItem("usuario") ?? "{}");
-      stored.fotoUrl = guardada;
-      localStorage.setItem("usuario", JSON.stringify(stored));
-      window.dispatchEvent(new Event("perfil:actualizado"));
+      // Reafirma el valor confirmado (evita que una sincronizacion en curso lo pise)
+      aplicarFoto(actualizado.fotoUrl ?? null);
     } catch (err) {
+      aplicarFoto(anterior);
       setErrorFoto(err instanceof Error ? err.message : "No se pudo guardar la foto");
     } finally {
       setSubiendoFoto(false);
