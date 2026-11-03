@@ -80,6 +80,11 @@ function emitDisponibilidadCambiada(variante) {
   io.emit("producto:disponibilidad", variante);
 }
 
+function emitProductosCambiados() {
+  if (!io) return;
+  io.emit("productos:cambiado");
+}
+
 function emitirCambioAutorizacion(usuarioId) {
   if (!io) return;
   io.to(`usuario_${usuarioId}`).emit("auth:changed");
@@ -90,5 +95,6 @@ module.exports = {
   emitPedidoNuevo,
   emitPedidoActualizado,
   emitDisponibilidadCambiada,
+  emitProductosCambiados,
   emitirCambioAutorizacion,
 };

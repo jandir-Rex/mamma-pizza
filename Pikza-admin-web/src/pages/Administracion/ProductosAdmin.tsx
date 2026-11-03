@@ -1,6 +1,7 @@
 // src/pages/Administracion/ProductosAdmin.tsx
 import { useEffect, useState } from "react";
 import { apiRequest } from "@/services/api";
+import { conectarSocket, obtenerSocket } from "@/services/socket";
 import DrawerProducto from "@/components/productos/DrawerProducto";
 import DrawerCategoria from "@/components/productos/DrawerCategoria";
 import GridProductos from "@/components/productos/GridProductos";
@@ -41,8 +42,29 @@ export default function ProductosAdmin() {
     cargarDatos();
   }, []);
 
-  async function cargarDatos() {
-    setCargando(true);
+  // Tiempo real: el backend avisa por socket cuando cambia la carta
+  useEffect(() => {
+    const recargar = () => {
+      cargarDatos(true);
+    };
+    const socket = obtenerSocket() ?? conectarSocket();
+    socket?.on("productos:cambiado", recargar);
+    socket?.on("producto:disponibilidad", recargar);
+    socket?.on("connect", recargar);
+
+    // Red de seguridad por si el socket falla
+    const intervalo = setInterval(recargar, 30000);
+
+    return () => {
+      socket?.off("productos:cambiado", recargar);
+      socket?.off("producto:disponibilidad", recargar);
+      socket?.off("connect", recargar);
+      clearInterval(intervalo);
+    };
+  }, []);
+
+  async function cargarDatos(silencioso = false) {
+    if (silencioso !== true) setCargando(true);
     setError("");
     try {
       const [listaMenu, listaCat] = await Promise.all([
