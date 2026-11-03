@@ -160,6 +160,7 @@ async function obtenerSesion(usuarioId) {
       dni: true,
       direccion: true,
       ciudad: true,
+      fotoUrl: true,
     },
   });
   if (!usuario) {
@@ -186,6 +187,7 @@ async function actualizarPerfil(usuarioId, datos) {
   if (datos.dni !== undefined) dataParaActualizar.dni = datos.dni ? datos.dni.trim() : null;
   if (datos.direccion !== undefined) dataParaActualizar.direccion = datos.direccion ? datos.direccion.trim() : null;
   if (datos.ciudad !== undefined) dataParaActualizar.ciudad = datos.ciudad ? datos.ciudad.trim() : null;
+  if (datos.fotoUrl !== undefined) dataParaActualizar.fotoUrl = datos.fotoUrl;
 
   // Si desea cambiar contraseña, valida la actual
   if (datos.passwordNuevo) {
@@ -218,6 +220,7 @@ async function actualizarPerfil(usuarioId, datos) {
     dni: actualizado.dni,
     direccion: actualizado.direccion,
     ciudad: actualizado.ciudad,
+    fotoUrl: actualizado.fotoUrl,
     rol: actualizado.rol,
     permisos: actualizado.permisos || [],
   };

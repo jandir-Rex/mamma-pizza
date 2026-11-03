@@ -9,6 +9,7 @@ export type UsuarioStaff = {
   email: string;
   rol: "ADMIN" | "MOZO" | "REPARTIDOR" | "PERSONALIZADO" | "CLIENTE";
   permisos: string[];
+  fotoUrl?: string | null;
 };
 
 type AuthContextValue = {

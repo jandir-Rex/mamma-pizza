@@ -51,6 +51,12 @@ const actualizarPerfilSchema = z.object({
   dni: z.string().max(20, "El documento no puede exceder 20 caracteres").optional(),
   direccion: z.string().max(250, "La dirección no puede exceder 250 caracteres").optional(),
   ciudad: z.string().max(100, "La ciudad no puede exceder 100 caracteres").optional(),
+  fotoUrl: z
+    .string()
+    .max(80000, "La imagen es demasiado grande")
+    .regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/, "Formato de imagen no vÃ¡lido")
+    .nullable()
+    .optional(),
   passwordActual: z.string().optional(),
   passwordNuevo: z.string().min(6).optional(),
 });

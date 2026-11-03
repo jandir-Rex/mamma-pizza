@@ -1,11 +1,12 @@
 // src/components/UserProfile/UserMetaCard.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { apiRequest } from "@/services/api";
 import { PencilIcon } from "@/icons";
 
 type PerfilActualizado = {
   telefono: string | null;
+  fotoUrl?: string | null;
 };
 
 export default function UserMetaCard() {
@@ -17,13 +18,20 @@ export default function UserMetaCard() {
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
+  const [foto, setFoto] = useState<string | null>(usuario?.fotoUrl ?? null);
+  const [subiendoFoto, setSubiendoFoto] = useState(false);
+  const [errorFoto, setErrorFoto] = useState("");
+  const inputFotoRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let activo = true;
 
     apiRequest<PerfilActualizado>("/auth/sesion")
       .then((perfil) => {
-        if (activo) setTelefono(perfil.telefono ?? "");
+        if (activo) {
+          setTelefono(perfil.telefono ?? "");
+          setFoto(perfil.fotoUrl ?? null);
+        }
       })
       .catch((err: unknown) => {
         if (activo) {
@@ -54,6 +62,78 @@ export default function UserMetaCard() {
     .slice(0, 2)
     .join("")
     .toUpperCase();
+
+  // Recorta al centro y reduce a 256x256 JPEG (~20 KB) antes de enviarla
+  function reducirImagen(archivo: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(archivo);
+      const img = new Image();
+      img.onload = () => {
+        const lado = 256;
+        const canvas = document.createElement("canvas");
+        canvas.width = lado;
+        canvas.height = lado;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          URL.revokeObjectURL(url);
+          reject(new Error("No se pudo procesar la imagen"));
+          return;
+        }
+        const recorte = Math.min(img.width, img.height);
+        const sx = (img.width - recorte) / 2;
+        const sy = (img.height - recorte) / 2;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, lado, lado);
+        ctx.drawImage(img, sx, sy, recorte, recorte, 0, 0, lado, lado);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL("image/jpeg", 0.85));
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("El archivo no es una imagen vÃ¡lida"));
+      };
+      img.src = url;
+    });
+  }
+
+  async function guardarFoto(nueva: string | null) {
+    setSubiendoFoto(true);
+    setErrorFoto("");
+    try {
+      const actualizado = await apiRequest<PerfilActualizado>("/auth/perfil", {
+        method: "PATCH",
+        body: JSON.stringify({ fotoUrl: nueva }),
+      });
+      const guardada = actualizado.fotoUrl ?? null;
+      setFoto(guardada);
+      const stored = JSON.parse(localStorage.getItem("usuario") ?? "{}");
+      stored.fotoUrl = guardada;
+      localStorage.setItem("usuario", JSON.stringify(stored));
+    } catch (err) {
+      setErrorFoto(err instanceof Error ? err.message : "No se pudo guardar la foto");
+    } finally {
+      setSubiendoFoto(false);
+    }
+  }
+
+  async function alElegirFoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const archivo = e.target.files?.[0];
+    e.target.value = "";
+    if (!archivo) return;
+    if (!archivo.type.startsWith("image/")) {
+      setErrorFoto("Elige un archivo de imagen (JPG, PNG o WebP).");
+      return;
+    }
+    if (archivo.size > 10 * 1024 * 1024) {
+      setErrorFoto("La imagen no debe pesar mÃ¡s de 10 MB.");
+      return;
+    }
+    try {
+      await guardarFoto(await reducirImagen(archivo));
+    } catch (err) {
+      setErrorFoto(err instanceof Error ? err.message : "No se pudo procesar la imagen");
+    }
+  }
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,8 +178,41 @@ export default function UserMetaCard() {
           <div className="flex-1">
             <div className="mb-6 flex flex-col gap-5 sm:flex-row xl:items-center xl:justify-between">
               <div className="flex w-full flex-col items-start gap-6 sm:flex-row sm:items-center">
-                <div className="flex size-20 shrink-0 items-center justify-center rounded-full bg-brand-500 text-2xl font-black text-white shadow-sm">
-                  {iniciales}
+                <div className="relative shrink-0">
+                  {foto ? (
+                    <img
+                      src={foto}
+                      alt={usuario?.nombre ?? "Foto de perfil"}
+                      className="size-20 rounded-full object-cover shadow-sm"
+                    />
+                  ) : (
+                    <div className="flex size-20 items-center justify-center rounded-full bg-brand-500 text-2xl font-black text-white shadow-sm">
+                      {iniciales}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => inputFotoRef.current?.click()}
+                    disabled={subiendoFoto}
+                    aria-label="Cambiar foto de perfil"
+                    className="absolute -bottom-1 -right-1 flex size-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                  >
+                    {subiendoFoto ? (
+                      <span className="text-[10px] font-bold">...</span>
+                    ) : (
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 8a2 2 0 0 1 2-2h1.5l1.2-1.8A1 1 0 0 1 8.5 4h7a1 1 0 0 1 .8.4L17.5 6H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8Z" />
+                        <circle cx="12" cy="12.5" r="3.5" />
+                      </svg>
+                    )}
+                  </button>
+                  <input
+                    ref={inputFotoRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    onChange={alElegirFoto}
+                    className="hidden"
+                  />
                 </div>
                 <div className="text-left">
                   <h4 className="mb-1 text-lg font-bold text-gray-800 dark:text-white/90">
@@ -114,6 +227,21 @@ export default function UserMetaCard() {
                       Mamma Pizza Local
                     </p>
                   </div>
+                  {foto && (
+                    <button
+                      type="button"
+                      onClick={() => void guardarFoto(null)}
+                      disabled={subiendoFoto}
+                      className="mt-2 text-xs font-semibold text-red-500 hover:underline disabled:opacity-50"
+                    >
+                      Quitar foto
+                    </button>
+                  )}
+                  {errorFoto && (
+                    <p role="alert" className="mt-2 text-xs text-red-600">
+                      {errorFoto}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

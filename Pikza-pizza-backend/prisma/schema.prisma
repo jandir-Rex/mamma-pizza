@@ -59,6 +59,7 @@ model Usuario {
   dni          String?
   direccion    String?
   ciudad       String?
+  fotoUrl      String?
   rol          RolUsuario @default(CLIENTE)
   permisos     String[]   @default([])
   createdAt    DateTime   @default(now())
