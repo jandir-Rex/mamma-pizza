@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		1E5A301B309B90EB003B81F6 /* SocketIO in Frameworks */ = {isa = PBXBuildFile; productRef = 1E5A301A309B90EB003B81F6 /* SocketIO */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		1E5A2E35309B7ACB003B81F6 /* MammaPizzaApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MammaPizzaApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1E5A301B309B90EB003B81F6 /* SocketIO in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +70,7 @@
 			);
 			name = MammaPizzaApp;
 			packageProductDependencies = (
+				1E5A301A309B90EB003B81F6 /* SocketIO */,
 			);
 			productName = MammaPizzaApp;
 			productReference = 1E5A2E35309B7ACB003B81F6 /* MammaPizzaApp.app */;
@@ -94,6 +100,9 @@
 			);
 			mainGroup = 1E5A2E2C309B7ACB003B81F6;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				1E5A3019309B90EB003B81F6 /* XCRemoteSwiftPackageReference "socket" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1E5A2E36309B7ACB003B81F6 /* Products */;
 			projectDirPath = "";
@@ -328,6 +337,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		1E5A3019309B90EB003B81F6 /* XCRemoteSwiftPackageReference "socket" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/socketio/socket.io-client-swift";
+			requirement = {
+				branch = master;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		1E5A301A309B90EB003B81F6 /* SocketIO */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1E5A3019309B90EB003B81F6 /* XCRemoteSwiftPackageReference "socket" */;
+			productName = SocketIO;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 1E5A2E2D309B7ACB003B81F6 /* Project object */;
 }
