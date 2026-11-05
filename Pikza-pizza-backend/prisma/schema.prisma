@@ -282,3 +282,19 @@ model PedidoItemAgregado {
 
   @@map("pedido_item_agregados")
 }
+// Ejecuciones del modulo de prediccion y abastecimiento (cada pronostico generado)
+model ForecastRun {
+  id              Int      @id @default(autoincrement())
+  periodoInicio   DateTime @db.Date
+  periodoFin      DateTime @db.Date
+  fechaCorte      DateTime @db.Date
+  estado          String
+  solicitadoPorId Int?
+  resultado       Json?
+  error           String?
+  duracionMs      Int?
+  createdAt       DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("forecast_runs")
+}

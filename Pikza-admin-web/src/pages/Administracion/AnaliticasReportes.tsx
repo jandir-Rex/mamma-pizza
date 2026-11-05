@@ -14,6 +14,7 @@ import {
 } from "@/types/pedido";
 import { apiRequest } from "@/services/api";
 import { useAuth } from "@/context/AuthContext";
+import PlanificacionInteligente from "@/components/analiticas/PlanificacionInteligente";
 
 type RangoTiempo = "HOY" | "7_DIAS" | "MES";
 type AccionRendimiento = "REGISTRO" | "CONTINUACION" | "FINALIZACION";
@@ -673,6 +674,8 @@ export default function AnaliticasReportes() {
         </div>
       </section>
       )}
+
+      {esAdmin && <PlanificacionInteligente />}
     </div>
   );
 }
