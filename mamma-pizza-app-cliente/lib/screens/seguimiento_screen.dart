@@ -7,6 +7,8 @@ import '../services/pedidos_service.dart';
 import '../services/socket_service.dart';
 import '../widgets/pizza_loading.dart';
 import '../widgets/seguimiento_widgets.dart';
+import '../widgets/yape_pago_widgets.dart';
+
 
 class SeguimientoScreen extends StatefulWidget {
   final int pedidoId;
@@ -144,7 +146,13 @@ class _SeguimientoScreenState extends State<SeguimientoScreen> {
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-                    children: [SeguimientoPedido(pedido: _pedido!)],
+                    children: [
+                      if (_pedido!.demorado)
+                        AvisoDemora(enRevision: _pedido!.comprobanteEstado == "EN_REVISION"),
+                      if (_pedido!.yapePendiente)
+                        ComprobanteYapeCard(pedido: _pedido!, onEnviado: () => _cargar(silencioso: true)),
+                      SeguimientoPedido(pedido: _pedido!),
+                    ],
                   ),
                 ),
     );

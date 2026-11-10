@@ -48,6 +48,12 @@ export default function FilaPedido({
     pedido.repartidor?.usuario?.nombre ??
     (pedido.repartidorId ? `Repartidor #${pedido.repartidorId}` : null);
 
+  // --- Pago y demora (pedidos del cliente) ---
+  const yapePorRevisar =
+    pedido.estado === "PENDIENTE_PAGO" && pedido.pago?.comprobanteEstado === "EN_REVISION";
+  const sinResponder =
+    pedido.estado === "PENDIENTE_PAGO" && !pedido.atendidoPorId && Boolean(pedido.disculpaEnviadaEn);
+
   return (
     <button
       type="button"
@@ -62,7 +68,7 @@ export default function FilaPedido({
       <div className="flex min-w-52 flex-1 items-center gap-3">
         <span
           className={`hidden h-8 w-1 shrink-0 rounded-full sm:block ${
-            esperaRepartidor
+            esperaRepartidor || yapePorRevisar
               ? "animate-pulse bg-error-500"
               : pedido.estado === "CONFIRMADO"
               ? "bg-brand-500"
@@ -82,6 +88,16 @@ export default function FilaPedido({
               {obtenerEtiquetaEstado(pedido)}
             </span>
 
+            {yapePorRevisar && (
+              <span className="animate-pulse rounded-full bg-purple-50 px-2 py-0.5 text-[11px] font-bold text-purple-700 dark:bg-purple-500/10 dark:text-purple-400">
+                Yape por revisar
+              </span>
+            )}
+            {sinResponder && (
+              <span className="rounded-full bg-error-50 px-2 py-0.5 text-[11px] font-bold text-error-700 dark:bg-error-500/10 dark:text-error-400">
+                Sin responder
+              </span>
+            )}
             {esperaRepartidor && (
               <span className="animate-pulse rounded-full bg-error-50 px-2 py-0.5 text-[11px] font-bold text-error-700 dark:bg-error-500/10 dark:text-error-400">
                 Sin repartidor
@@ -140,6 +156,7 @@ export default function FilaPedido({
       <span className="sr-only">
         {obtenerEtiquetaEstado(pedido)}, {tiempoTranscurrido(pedido.createdAt)}
         {esperaRepartidor ? ", sin repartidor asignado" : ""}
+        {yapePorRevisar ? ", Yape por revisar" : ""}
       </span>
     </button>
   );

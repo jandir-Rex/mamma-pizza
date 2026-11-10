@@ -7,6 +7,14 @@ function errorHandler(err, req, res, next) {
     return res.status(400).json({ error: "El cuerpo de la petición no es JSON válido" });
   }
 
+  // Errores de subida de archivos (multer)
+  if (err.name === "MulterError") {
+    const grande = err.code === "LIMIT_FILE_SIZE";
+    return res.status(grande ? 413 : 400).json({
+      error: grande ? "La imagen supera los 5 MB" : "Archivo no válido",
+    });
+  }
+
   if (err.code === "P2002") {
     return res.status(409).json({ error: "Ya existe un registro con ese valor único" });
   }

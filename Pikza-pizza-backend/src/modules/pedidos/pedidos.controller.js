@@ -6,6 +6,8 @@ const {
   actualizarEstadoSchema,
   entregarConCodigoSchema,
   resetearCodigoSchema,
+  subirComprobanteSchema,
+  rechazarComprobanteSchema,
   listarPedidosQuerySchema,
   auditarPedidosQuerySchema,
 } = require("./pedidos.validation");
@@ -128,6 +130,49 @@ async function resetearCodigoEntrega(req, res, next) {
   }
 }
 
+// POST /:id/comprobante  (multipart: imagen + yapeNombre)
+async function subirComprobante(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    const { yapeNombre } = subirComprobanteSchema.parse(req.body ?? {});
+    const pedido = await pedidosService.subirComprobante(id, { archivo: req.file, yapeNombre }, req.usuario);
+    res.status(201).json(pedido);
+  } catch (err) {
+    manejarZodError(err, res, next);
+  }
+}
+
+// GET /:id/comprobante -> devuelve la imagen
+async function verComprobante(req, res, next) {
+  try {
+    const { mime, datos } = await pedidosService.obtenerComprobante(Number(req.params.id), req.usuario);
+    res.set("Content-Type", mime);
+    res.set("Cache-Control", "private, max-age=300");
+    res.send(Buffer.from(datos));
+  } catch (err) {
+    next(err);
+  }
+}
+
+// PATCH /:id/rechazar-comprobante  { motivo }
+async function rechazarComprobante(req, res, next) {
+  try {
+    const { motivo } = rechazarComprobanteSchema.parse(req.body ?? {});
+    const pedido = await pedidosService.rechazarComprobante(Number(req.params.id), motivo, req.usuario);
+    res.json(pedido);
+  } catch (err) {
+    manejarZodError(err, res, next);
+  }
+}
+
+// GET /config-pago -> a dónde yapear
+function configPago(req, res) {
+  res.json({
+    yapeNumero: process.env.YAPE_NUMERO ?? null,
+    yapeTitular: process.env.YAPE_TITULAR ?? null,
+  });
+}
+
 async function misEntregas(req, res, next) {
   try {
     const entregas = await pedidosService.misEntregas(req.usuario.id);
@@ -217,6 +262,10 @@ module.exports = {
   liberarRepartidor,
   entregarConCodigo,
   resetearCodigoEntrega,
+  subirComprobante,
+  verComprobante,
+  rechazarComprobante,
+  configPago,
   misEntregas,
   misPedidos,
   listarTodos,

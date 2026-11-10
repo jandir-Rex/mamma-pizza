@@ -31,6 +31,12 @@ function validarAccesoCanal(solicitante, pedido, permisoBase) {
   }
 }
 
+function errorHttp(mensaje, status) {
+  const error = new Error(mensaje);
+  error.status = status;
+  return error;
+}
+
 function generarCodigo() {
   return `PZ-${Date.now().toString(36).toUpperCase()}`;
 }
@@ -84,8 +90,17 @@ const TRANSICIONES_VALIDAS = {
   CANCELADO: [],
 };
 
+// Include estándar para devolver/emitir un pedido completo (sin la imagen del comprobante)
+const INCLUDE_PEDIDO_COMPLETO = {
+  items: { include: { agregados: true } },
+  pago: true,
+  cliente: { select: { nombre: true, telefono: true } },
+  direccion: true,
+  mesa: { select: { numero: true } },
+};
+
 async function crearPedido(clienteId, rolSolicitante, datos, solicitante) {
-  const { canal, direccionId, mesaId, metodoPago, items, clienteNombre } = datos;
+  const { canal, direccionId, mesaId, metodoPago, items, clienteNombre, pagaCon } = datos;
 
   if (["MOZO", "PERSONALIZADO"].includes(rolSolicitante)) {
     const canalOperativo = canal === "DELIVERY" ? "DELIVERY" : mesaId ? "SALON" : "PARA_LLEVAR";
@@ -208,6 +223,13 @@ async function crearPedido(clienteId, rolSolicitante, datos, solicitante) {
       });
     }
 
+    // Efectivo: el monto con el que paga debe cubrir el total (si no, no hay vuelto posible)
+    if (metodoPago === "EFECTIVO" && pagaCon != null && pagaCon < subtotal) {
+      const error = new Error("El monto con el que pagas debe cubrir el total del pedido");
+      error.status = 400;
+      throw error;
+    }
+
     const esPersonal = ["ADMIN", "MOZO", "PERSONALIZADO"].includes(rolSolicitante);
     const usuarioAtencion = esPersonal
       ? await tx.usuario.findUnique({
@@ -234,7 +256,12 @@ async function crearPedido(clienteId, rolSolicitante, datos, solicitante) {
         total: subtotal,
         items: { create: itemsParaCrear },
         pago: {
-          create: { metodo: metodoPago, monto: subtotal, estado: "pendiente" },
+          create: {
+            metodo: metodoPago,
+            monto: subtotal,
+            estado: "pendiente",
+            pagaCon: metodoPago === "EFECTIVO" ? (pagaCon ?? null) : null,
+          },
         },
         ...(esPersonal && {
           historialAtencion: {
@@ -250,7 +277,7 @@ async function crearPedido(clienteId, rolSolicitante, datos, solicitante) {
       include: {
         items: { include: { agregados: true } },
         pago: true,
-        atendidoPor: { select: { id: true, nombre: true, rol: true } }, // 👈 NUEVO: Retorna responsable
+        atendidoPor: { select: { id: true, nombre: true, rol: true } },
         historialAtencion: { orderBy: { createdAt: "asc" } },
       },
     });
@@ -279,9 +306,22 @@ async function confirmarPago(pedidoId, metodo, solicitante) {
       throw error;
     }
 
+    // Yape elegido por el cliente desde su app: no se aprueba sin captura en revisión
+    const yapeDeCliente =
+      actual.pago?.metodo === "YAPE" && metodo === "YAPE" && !actual.atendidoPorId;
+    if (yapeDeCliente && actual.pago.comprobanteEstado !== "EN_REVISION") {
+      const error = new Error("El cliente aún no sube la captura del Yape");
+      error.status = 409;
+      throw error;
+    }
+
     await tx.pago.update({
       where: { pedidoId },
-      data: { estado: "pagado", metodo },
+      data: {
+        estado: "pagado",
+        metodo,
+        ...(yapeDeCliente && { comprobanteEstado: "APROBADO", comprobanteMotivo: null }),
+      },
     });
 
     return tx.pedido.update({
@@ -449,6 +489,92 @@ async function actualizarEstado(pedidoId, nuevoEstado, solicitante) {
 
   // Pero la RESPUESTA HTTP al repartidor va sin el código
   return ocultarCodigoSiRepartidor(resultado, solicitante);
+}
+
+// ------------------- COMPROBANTE DE YAPE -------------------
+
+// Se valida el tipo real por los primeros bytes, no por lo que declare el cliente
+function detectarMimeImagen(buf) {
+  if (!buf || buf.length < 12) return null;
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
+  if (buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "image/png";
+  if (buf.subarray(0, 4).toString("ascii") === "RIFF" && buf.subarray(8, 12).toString("ascii") === "WEBP") return "image/webp";
+  return null;
+}
+
+async function subirComprobante(pedidoId, { archivo, yapeNombre }, solicitante) {
+  if (!archivo) throw errorHttp("Adjunta la captura de tu Yape", 400);
+  const mime = detectarMimeImagen(archivo.buffer);
+  if (!mime) throw errorHttp("El archivo debe ser una imagen JPG, PNG o WEBP", 400);
+
+  const pedido = await prisma.$transaction(async (tx) => {
+    const actual = await tx.pedido.findUnique({ where: { id: pedidoId }, include: { pago: true } });
+    if (!actual) throw errorHttp("Pedido no encontrado", 404);
+    if (actual.clienteId !== solicitante.id) throw errorHttp("Este pedido no es tuyo", 403);
+    if (actual.estado !== "PENDIENTE_PAGO") throw errorHttp("Este pedido ya no espera pago", 409);
+    if (actual.pago?.metodo !== "YAPE") throw errorHttp("Este pedido no es de pago con Yape", 409);
+    if (actual.pago.comprobanteEstado === "EN_REVISION") {
+      throw errorHttp("Tu comprobante ya está en revisión", 409);
+    }
+
+    await tx.pagoComprobante.upsert({
+      where: { pagoId: actual.pago.id },
+      create: { pagoId: actual.pago.id, mime, datos: archivo.buffer },
+      update: { mime, datos: archivo.buffer, createdAt: new Date() },
+    });
+    await tx.pago.update({
+      where: { id: actual.pago.id },
+      data: {
+        comprobanteEstado: "EN_REVISION",
+        comprobanteMotivo: null,
+        comprobanteSubidoEn: new Date(),
+        yapeNombre,
+      },
+    });
+    return tx.pedido.findUnique({ where: { id: pedidoId }, include: INCLUDE_PEDIDO_COMPLETO });
+  });
+
+  emitPedidoActualizado(pedido);
+  return pedido;
+}
+
+async function obtenerComprobante(pedidoId, solicitante) {
+  const pedido = await prisma.pedido.findUnique({
+    where: { id: pedidoId },
+    include: { pago: { include: { comprobante: true } } },
+  });
+  if (!pedido) throw errorHttp("Pedido no encontrado", 404);
+
+  if (solicitante.rol === "CLIENTE") {
+    if (pedido.clienteId !== solicitante.id) throw errorHttp("Este pedido no es tuyo", 403);
+  } else if (["ADMIN", "MOZO", "PERSONALIZADO"].includes(solicitante.rol)) {
+    validarAccesoCanal(solicitante, pedido, "pedidos:cobrar");
+  } else {
+    throw errorHttp("No tienes permiso para ver este comprobante", 403);
+  }
+
+  const comprobante = pedido.pago?.comprobante;
+  if (!comprobante) throw errorHttp("Este pedido no tiene comprobante", 404);
+  return { mime: comprobante.mime, datos: comprobante.datos };
+}
+
+async function rechazarComprobante(pedidoId, motivo, solicitante) {
+  const pedido = await prisma.$transaction(async (tx) => {
+    const actual = await tx.pedido.findUnique({ where: { id: pedidoId }, include: { pago: true } });
+    if (!actual) throw errorHttp("Pedido no encontrado", 404);
+    validarAccesoCanal(solicitante, actual, "pedidos:cobrar");
+    if (actual.estado !== "PENDIENTE_PAGO" || actual.pago?.comprobanteEstado !== "EN_REVISION") {
+      throw errorHttp("No hay un comprobante en revisión para rechazar", 409);
+    }
+    await tx.pago.update({
+      where: { id: actual.pago.id },
+      data: { comprobanteEstado: "RECHAZADO", comprobanteMotivo: motivo },
+    });
+    return tx.pedido.findUnique({ where: { id: pedidoId }, include: INCLUDE_PEDIDO_COMPLETO });
+  });
+
+  emitPedidoActualizado(pedido);
+  return pedido;
 }
 
 // ------------------- REPARTO: SUGERENCIA / ASIGNACIÓN / LIBERACIÓN -------------------
@@ -929,7 +1055,7 @@ async function listarTodos({ desde, hasta } = {}, solicitante) {
       pago: true,
       cliente: { select: { nombre: true, telefono: true } },
       mesa: { select: { numero: true } },
-      atendidoPor: { select: { id: true, nombre: true, rol: true } }, // 👈 NUEVO: Relación agregada al listado
+      atendidoPor: { select: { id: true, nombre: true, rol: true } },
       repartidor: { include: { usuario: { select: { nombre: true } } } },
       historialAtencion: { orderBy: { createdAt: "asc" } },
     },
@@ -1478,6 +1604,9 @@ module.exports = {
   crearPedido,
   confirmarPago,
   actualizarEstado,
+  subirComprobante,
+  obtenerComprobante,
+  rechazarComprobante,
   asignarRepartidor,
   sugerirRepartidores,
   autoAsignarPedido,

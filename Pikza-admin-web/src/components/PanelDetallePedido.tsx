@@ -14,6 +14,7 @@ import { imprimirComandasPreparacion, imprimirTicketTermico } from "@/utils/impr
 import DrawerCobroMesa from "@/components/pedidos/DrawerCobroMesa";
 import DrawerAgregarConsumo from "@/components/pedidos/DrawerAgregarConsumo";
 import SeccionReparto from "@/components/pedidos/SeccionReparto";
+import RevisionYape from "@/components/pedidos/RevisionYape";
 
 // --- ICONOS VECTORIALES PROFESIONALES ---
 function PrintIcon(props: React.SVGProps<SVGSVGElement>) {
@@ -33,6 +34,8 @@ function PlusIcon(props: React.SVGProps<SVGSVGElement>) {
 }
 
 const transicionesEstado: Partial<Record<EstadoPedido, EstadoPedido[]>> = {
+  // Un pedido sin pagar se puede anular (ej.: Yape rechazado y el cliente no responde)
+  PENDIENTE_PAGO: ["CANCELADO"],
   CONFIRMADO: ["EN_PREPARACION", "CANCELADO"],
   EN_PREPARACION: ["EN_CAMINO", "ENTREGADO", "CANCELADO"],
   EN_CAMINO: ["ENTREGADO", "CANCELADO"],
@@ -138,12 +141,23 @@ export default function PanelDetallePedido({
     void cambiarEstado("ENTREGADO");
   }
 
+  function anularPedido() {
+    if (!window.confirm("¿Anular este pedido? Esta acción no se puede deshacer.")) return;
+    void cambiarEstado("CANCELADO");
+  }
+
   const transicionesDisponibles = (transicionesEstado[pedido.estado] ?? []).filter(
     (e) => e !== "EN_CAMINO" || pedido.canal === "DELIVERY"
   );
 
   // Prioridad: 1. Nombre ingresado en mostrador ("PruebaTest"), 2. Nombre de cuenta registrada, 3. Fallback
   const nombreClienteVisible = pedido.clienteNombre || pedido.cliente?.nombre || "Cliente en local";
+
+  // Yape del cliente esperando verificación: se aprueba desde la sección de Yape, no desde "Registrar pago"
+  const yapeEnRevision =
+    pedido.pago?.metodo === "YAPE" &&
+    pedido.pago?.comprobanteEstado === "EN_REVISION" &&
+    pedido.estado === "PENDIENTE_PAGO";
 
   return (
     <aside className="flex w-full max-w-md flex-col overflow-y-auto border-l border-gray-200 bg-white p-6 shadow-xl lg:w-96 dark:border-gray-800 dark:bg-gray-900">
@@ -184,6 +198,13 @@ export default function PanelDetallePedido({
       {error && (
         <p role="alert" className="mb-4 rounded-lg bg-red-50 p-3 text-xs text-red-600 dark:bg-red-950/20">
           {error}
+        </p>
+      )}
+
+      {/* Aviso de demora: el cliente ya fue avisado en su app */}
+      {pedido.estado === "PENDIENTE_PAGO" && !pedido.atendidoPorId && pedido.disculpaEnviadaEn && (
+        <p className="mb-4 rounded-lg bg-error-50 p-3 text-xs font-semibold text-error-700 dark:bg-error-500/10 dark:text-error-400">
+          Este pedido lleva más de lo normal sin respuesta. El cliente ya recibió un mensaje de disculpas.
         </p>
       )}
 
@@ -252,7 +273,24 @@ export default function PanelDetallePedido({
             {pedido.pago?.estado === "pagado" ? "Cuenta Pagada" : "Comanda Abierta (Por Pagar)"}
           </span>
         </p>
+
+        {/* Efectivo: el repartidor debe llevar el vuelto */}
+        {pedido.pago?.metodo === "EFECTIVO" && pedido.pago?.pagaCon != null && (
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Paga con {formatoPrecio(pedido.pago.pagaCon)} · Vuelto{" "}
+            <span className="font-bold text-gray-800 dark:text-gray-200">
+              {formatoPrecio(Math.max(Number(pedido.pago.pagaCon) - Number(pedido.total), 0))}
+            </span>
+          </p>
+        )}
       </section>
+
+      {/* Verificación del comprobante de Yape (captura, monto, nombre, aprobar/rechazar) */}
+      <RevisionYape
+        pedido={pedido}
+        puedeRevisar={puedeCobrar && !soloLectura}
+        onActualizado={onActualizado}
+      />
 
       {/* Atendido Por (Staff / Mozo / Mostrador) */}
       {pedido.atendidoPor && (
@@ -345,8 +383,9 @@ export default function PanelDetallePedido({
       {/* Botones de Operación */}
       {!soloLectura && (
         <div className="mt-auto space-y-2.5 border-t border-gray-100 pt-5 dark:border-gray-800">
-          {/* Si aún no está pagado: Botón de Cobro Final */}
-          {puedeCobrar && pedido.pago?.estado !== "pagado" && (
+          {/* Si aún no está pagado: Botón de Cobro Final.
+              Con un Yape en revisión se oculta: hay que aprobarlo desde la sección de Yape */}
+          {puedeCobrar && pedido.pago?.estado !== "pagado" && !yapeEnRevision && (
             <button
               type="button"
               disabled={cargando}
@@ -395,7 +434,7 @@ export default function PanelDetallePedido({
             <button
               type="button"
               disabled={cargando}
-              onClick={() => cambiarEstado("CANCELADO")}
+              onClick={anularPedido}
               className="w-full rounded-xl border border-red-200 py-2.5 text-xs font-bold text-red-600 hover:bg-red-50 dark:border-red-900/30 dark:text-red-400"
             >
               Anular / Cancelar Pedido

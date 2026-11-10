@@ -19,6 +19,8 @@ const crearPedidoSchema = z
     mesaId: z.number().int().positive().nullable().optional(),
     clienteNombre: z.string().optional(),
     metodoPago: z.enum(["YAPE", "EFECTIVO", "TARJETA"]),
+    // Efectivo: con cuánto va a pagar el cliente (para llevar el vuelto)
+    pagaCon: z.number().positive().max(10000).optional(),
     items: z.array(itemSchema).min(1, "El pedido debe tener al menos un producto"),
   })
   .refine((data) => (data.canal === "DELIVERY" ? !!data.direccionId : true), {
@@ -48,6 +50,15 @@ const entregarConCodigoSchema = z.object({
 // regenerar = true genera un código nuevo además de poner los intentos en 0
 const resetearCodigoSchema = z.object({
   regenerar: z.boolean().optional().default(false),
+});
+
+// Captura de Yape: el archivo va por multipart, aquí se valida el texto
+const subirComprobanteSchema = z.object({
+  yapeNombre: z.string().trim().min(2, "Indica el nombre de quien yapeó").max(80),
+});
+
+const rechazarComprobanteSchema = z.object({
+  motivo: z.string().trim().min(3, "Indica el motivo del rechazo").max(200),
 });
 
 const listarPedidosQuerySchema = z
@@ -93,6 +104,8 @@ module.exports = {
   actualizarEstadoSchema,
   entregarConCodigoSchema,
   resetearCodigoSchema,
+  subirComprobanteSchema,
+  rechazarComprobanteSchema,
   listarPedidosQuerySchema,
   auditarPedidosQuerySchema,
 };

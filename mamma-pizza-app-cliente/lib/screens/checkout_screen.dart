@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
 import '../core/theme.dart';
 import '../core/page_transitions.dart';
 import '../models/direccion.dart';
 import '../services/direcciones_service.dart';
 import '../services/pedidos_service.dart';
 import '../providers/carrito_provider.dart';
+import '../widgets/yape_pago_widgets.dart';
 import 'pedido_exito_screen.dart';
 import 'seleccionar_ubicacion_screen.dart';
 
@@ -23,6 +25,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   bool _cargandoDirecciones = true;
   bool _enviando = false;
   String? _error;
+
+  XFile? _captura;
+  final _yapeNombre = TextEditingController();
+  final _pagaCon = TextEditingController();
+  bool _montoExacto = true;
+
+  @override
+  void dispose() {
+    _yapeNombre.dispose();
+    _pagaCon.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -67,6 +81,25 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
 
+    double? pagaCon;
+    if (_metodoPago == "YAPE") {
+      if (_captura == null) {
+        setState(() => _error = "Adjunta la captura de tu Yape");
+        return;
+      }
+      if (_yapeNombre.text.trim().length < 2) {
+        setState(() => _error = "Indica el nombre de quien yapeó");
+        return;
+      }
+    }
+    if (_metodoPago == "EFECTIVO" && !_montoExacto) {
+      pagaCon = double.tryParse(_pagaCon.text.replaceAll(",", "."));
+      if (pagaCon == null || pagaCon < carrito.total) {
+        setState(() => _error = "Indica con cuánto pagarás (mínimo S/. ${carrito.total.toStringAsFixed(2)})");
+        return;
+      }
+    }
+
     setState(() {
       _enviando = true;
       _error = null;
@@ -86,8 +119,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         canal: "DELIVERY",
         direccionId: _direccionSeleccionada!.id,
         metodoPago: _metodoPago,
+        pagaCon: pagaCon,
         items: items,
       );
+
+      if (_metodoPago == "YAPE") {
+        try {
+          await PedidosService.subirComprobante(pedido.id, imagen: _captura!, yapeNombre: _yapeNombre.text.trim());
+        } catch (_) {
+          // El pedido ya existe: en el seguimiento podrá reintentar la subida
+        }
+      }
 
       carrito.vaciar();
       if (!mounted) return;
@@ -193,6 +235,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     habilitado: false,
                     onTap: () {},
                   ),
+                  if (_metodoPago == "YAPE")
+                    YapeFormulario(
+                      total: carrito.total,
+                      captura: _captura,
+                      nombreCtrl: _yapeNombre,
+                      onCaptura: (f) => setState(() => _captura = f),
+                    ),
+                  if (_metodoPago == "EFECTIVO")
+                    PagaConSelector(
+                      total: carrito.total,
+                      exacto: _montoExacto,
+                      ctrl: _pagaCon,
+                      onExacto: (v) => setState(() => _montoExacto = v),
+                    ),
                   if (_error != null) ...[
                     const SizedBox(height: 16),
                     Container(

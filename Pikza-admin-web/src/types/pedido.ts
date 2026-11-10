@@ -11,6 +11,12 @@ export type EstadoPedido =
 // Debe coincidir con MAX_INTENTOS_CODIGO del backend
 export const MAX_INTENTOS_CODIGO = 3;
 
+export type EstadoComprobante =
+  | "SIN_COMPROBANTE"
+  | "EN_REVISION"
+  | "APROBADO"
+  | "RECHAZADO";
+
 export type Pedido = {
   id: number;
   codigo: string;
@@ -25,6 +31,8 @@ export type Pedido = {
   codigoConfirmacion?: string | null;
   intentosCodigoFallidos?: number;
   confirmadoEn?: string | null;
+  // Se llena cuando el pedido del cliente tardó demasiado en recibir respuesta
+  disculpaEnviadaEn?: string | null;
   direccion?: {
     id: number;
     zona: string;
@@ -46,7 +54,18 @@ export type Pedido = {
   }[];
   mesaId?: number | null;
   mesa?: { numero: number } | null;
-  pago?: { metodo?: string; estado?: string } | null;
+  pago?: {
+    metodo?: string;
+    estado?: string;
+    monto?: number | string;
+    // Efectivo: con cuánto paga el cliente
+    pagaCon?: number | string | null;
+    // Yape: verificación manual
+    yapeNombre?: string | null;
+    comprobanteEstado?: EstadoComprobante;
+    comprobanteMotivo?: string | null;
+    comprobanteSubidoEn?: string | null;
+  } | null;
   items: PedidoItem[];
 };
 
