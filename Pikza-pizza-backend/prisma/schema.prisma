@@ -49,6 +49,14 @@ enum AreaPreparacion {
   BARRA
 }
 
+// Estado de la captura de Yape que sube el cliente
+enum EstadoComprobante {
+  SIN_COMPROBANTE
+  EN_REVISION
+  APROBADO
+  RECHAZADO
+}
+
 // ------------------- USUARIOS -------------------
 model Usuario {
   id           Int        @id @default(autoincrement())
@@ -200,6 +208,10 @@ model Pedido {
   confirmadoEn           DateTime?
   intentosCodigoFallidos Int       @default(0)
 
+  // ------ Demora sin respuesta ------
+  // Se marca cuando un pedido del cliente lleva demasiado tiempo sin ser atendido
+  disculpaEnviadaEn DateTime?
+
   items             PedidoItem[]
   pago              Pago?
   historialAtencion PedidoAtencion[]
@@ -245,9 +257,32 @@ model Pago {
   monto         Decimal       @db.Decimal(10, 2)
   estado        String        @default("pendiente")
   transactionId String?
-  createdAt     DateTime      @default(now())
+
+  // ------ Efectivo: con cuánto paga el cliente (para calcular el vuelto) ------
+  pagaCon Decimal? @db.Decimal(10, 2)
+
+  // ------ Yape: verificación manual del comprobante ------
+  yapeNombre          String?
+  comprobanteEstado   EstadoComprobante @default(SIN_COMPROBANTE)
+  comprobanteMotivo   String?
+  comprobanteSubidoEn DateTime?
+  comprobante         PagoComprobante?
+
+  createdAt DateTime @default(now())
 
   @@map("pagos")
+}
+
+// Imagen de la captura de Yape (se guarda aparte para no cargarla en cada consulta de pagos)
+model PagoComprobante {
+  id        Int      @id @default(autoincrement())
+  pagoId    Int      @unique
+  pago      Pago     @relation(fields: [pagoId], references: [id], onDelete: Cascade)
+  mime      String
+  datos     Bytes
+  createdAt DateTime @default(now())
+
+  @@map("pago_comprobantes")
 }
 
 model Agregado {
@@ -282,7 +317,9 @@ model PedidoItemAgregado {
 
   @@map("pedido_item_agregados")
 }
-// Ejecuciones del modulo de prediccion y abastecimiento (cada pronostico generado)
+
+// ------------------- PREDICCIÓN Y ABASTECIMIENTO -------------------
+// Ejecuciones del módulo de predicción (cada pronóstico generado)
 model ForecastRun {
   id              Int      @id @default(autoincrement())
   periodoInicio   DateTime @db.Date
