@@ -15,6 +15,7 @@ import {
 import { apiRequest } from "@/services/api";
 import { useAuth } from "@/context/AuthContext";
 import PlanificacionInteligente from "@/components/analiticas/PlanificacionInteligente";
+import { BarrasActividad } from "@/components/analiticas/graficos";
 
 type RangoTiempo = "HOY" | "7_DIAS" | "MES";
 type AccionRendimiento = "REGISTRO" | "CONTINUACION" | "FINALIZACION";
@@ -263,6 +264,8 @@ export default function AnaliticasReportes() {
   const pedidosValidos = resumenPedidos?.pedidosValidos ?? 0;
   const totalFacturado = resumenPedidos?.totalFacturado ?? 0;
   const ticketPromedio = resumenPedidos?.ticketPromedio ?? 0;
+  const canales = resumenPedidos?.canales ?? { salon: 0, paraLlevar: 0, delivery: 0 };
+  const totalCanales = canales.salon + canales.paraLlevar + canales.delivery;
 
   const rankingStaff = rendimiento?.equipo ?? [];
   const mejorVendedor = [...rankingStaff].sort(
@@ -270,7 +273,7 @@ export default function AnaliticasReportes() {
   )[0];
 
   const picos = rendimiento?.picos ?? [];
-  const maxActividad = Math.max(1, ...picos.map((pico) => pico.actividad));
+
   const resumenPeriodo = esAdmin
     ? rankingStaff.reduce(
         (total, persona) => ({
@@ -339,7 +342,16 @@ export default function AnaliticasReportes() {
               <span className="text-purple-500">Llevar: {resumenPedidos?.canales.paraLlevar ?? 0}</span>
               <span className="text-amber-500">Delivery: {resumenPedidos?.canales.delivery ?? 0}</span>
             </div>
-            <p className="mt-1 text-xs text-gray-500">Distribución de volumen</p>
+            <div className="mt-3 flex h-1.5 gap-0.5 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800" aria-hidden>
+              {totalCanales > 0 && (
+                <>
+                  <div className="bg-blue-500" style={{ width: `${(canales.salon / totalCanales) * 100}%` }} />
+                  <div className="bg-purple-500" style={{ width: `${(canales.paraLlevar / totalCanales) * 100}%` }} />
+                  <div className="bg-amber-500" style={{ width: `${(canales.delivery / totalCanales) * 100}%` }} />
+                </>
+              )}
+            </div>
+            <p className="mt-2 text-xs text-gray-500">Distribución de volumen</p>
           </div>
           <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-xs dark:border-gray-800 dark:bg-gray-900">
             <p className="text-xs font-bold uppercase tracking-wider text-gray-400">Más comandas registradas</p>
@@ -435,28 +447,28 @@ export default function AnaliticasReportes() {
             {cargando ? "Cargando actividad..." : "Aún no hay actividad registrada en este período."}
           </p>
         ) : (
-          <div className="flex min-h-40 items-end gap-2 overflow-x-auto border-b border-gray-100 pb-2 dark:border-gray-800">
-            {picos.map((pico) => (
-              <div key={pico.periodo} className="flex min-w-10 flex-1 flex-col items-center justify-end gap-2">
-                <span className="text-[10px] font-semibold text-gray-500">{pico.actividad}</span>
-                <div
-                  title={`${pico.periodo}: ${pico.registrados} registros, ${pico.continuados} continuaciones, ${pico.finalizados} finalizaciones`}
-                  className="w-full max-w-12 rounded-t-md bg-brand-500/80"
-                  style={{ height: `${Math.max(5, (pico.actividad / maxActividad) * 112)}px` }}
-                />
-                <span className="whitespace-nowrap text-[10px] text-gray-500">
-                  {rangoTipo === "HOY"
-                    ? pico.periodo
-                    : new Date(`${pico.periodo}T12:00:00`).toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit" })}
-                </span>
-              </div>
-            ))}
-          </div>
+          <BarrasActividad
+            picos={picos}
+            etiqueta={(periodo) =>
+              rangoTipo === "HOY"
+                ? periodo
+                : new Date(`${periodo}T12:00:00`).toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit" })
+            }
+          />
         )}
         <div className="mt-3 flex flex-wrap gap-4 text-[11px] text-gray-500">
-          <span>Registró: {resumenPeriodo?.registrados ?? 0}</span>
-          <span>Continuó: {resumenPeriodo?.continuados ?? 0}</span>
-          <span>Finalizó: {resumenPeriodo?.finalizados ?? 0}</span>
+          <span className="inline-flex items-center gap-1.5">
+            <i className="size-2 rounded-sm bg-brand-500" />
+            Registró: {resumenPeriodo?.registrados ?? 0}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <i className="size-2 rounded-sm bg-brand-300" />
+            Continuó: {resumenPeriodo?.continuados ?? 0}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <i className="size-2 rounded-sm bg-gray-700 dark:bg-gray-300" />
+            Finalizó: {resumenPeriodo?.finalizados ?? 0}
+          </span>
           <span className="basis-full text-gray-400">
             El seguimiento de finalizaciones comienza con esta actualización; los pedidos finalizados antes no guardaban quién los cerró.
           </span>

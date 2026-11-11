@@ -2,6 +2,7 @@
 from .ai.manager import analizar_con_ia
 from .config import Settings
 from .data import construir_series
+from .historial import construir_serie_historica
 from .forecasting.predictor import dias_objetivo, pronosticar_producto
 from .recommendations import generar_recomendaciones
 from .schemas import AnalisisRequest, AnalisisResponse, EstadoMotor, Recomendacion
@@ -54,7 +55,8 @@ def analizar(req: AnalisisRequest, settings: Settings) -> AnalisisResponse:
     ingredientes, adv_sup = calcular_abastecimiento(finales, nombres, req.recetas, req.inventario)
     advertencias += adv_sup
 
-    recs = generar_recomendaciones(productos, ingredientes) + recs
+    comparable = datos.meta.get("dias_historial", 0) >= 2 * len(objetivo)
+    recs = generar_recomendaciones(productos, ingredientes, comparable) + recs
     if analisis_ia:
         for texto in analisis_ia.recomendaciones[:5]:
             recs.append(Recomendacion(tipo="analisis_ia", severidad="info", mensaje=texto,
@@ -70,12 +72,13 @@ def analizar(req: AnalisisRequest, settings: Settings) -> AnalisisResponse:
         estado=estado,
         motores={"estadistico": motor_a, "ia_cloud": motor_b,
                  "evaluacion": EstadoMotor(estado="completado", detalle=evaluacion["modo"])},
-        datos={**datos.meta, "registros_ventas_recibidos": len(req.ventas), "recetas_recibidas": len(req.recetas),
+        datos={**datos.meta, "variacion_comparable": comparable, "dias_periodo": len(objetivo), "registros_ventas_recibidos": len(req.ventas), "recetas_recibidas": len(req.recetas),
                "ingredientes_en_inventario": len(req.inventario)},
         productos=productos,
         ingredientes=ingredientes,
         evaluacion=evaluacion,
         analisis_ia=analisis_ia,
+        serie_historica=construir_serie_historica(datos, req.fecha_corte),
         recomendaciones=recs,
         advertencias=advertencias,
     )

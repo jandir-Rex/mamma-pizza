@@ -137,5 +137,6 @@ class AnalisisResponse(BaseModel):
     ingredientes: list[IngredienteNecesidad]
     evaluacion: dict
     analisis_ia: AnalisisIA | None = None
+    serie_historica: dict = Field(default_factory=dict)
     recomendaciones: list[Recomendacion]
     advertencias: list[str]

@@ -128,3 +128,32 @@ def test_ia_sin_respuesta_por_timeout(monkeypatch):
     monkeypatch.setattr("app.ai.gemini.time.sleep", lambda s: None)
     d = cliente.post("/internal/intelligence/analyze", json=_payload(), headers=H).json()
     assert d["motores"]["ia_cloud"]["estado"] == "error" and "tiempo" in d["motores"]["ia_cloud"]["detalle"]
+
+
+def test_serie_historica_para_graficas():
+    d = cliente.post("/internal/intelligence/analyze", json=_payload(dias=200, ia=False), headers=H).json()
+    s = d["serie_historica"]
+    assert len(s["meses"]) >= 6 and len(s["meses"]) == len(s["total"])
+    # el total mensual coincide con la suma de productos (top + otros)
+    for i, total in enumerate(s["total"]):
+        assert abs(sum(p["valores"][i] for p in s["por_producto"]) - total) < 0.2
+    assert s["semanal"]["dias"][0] == "Lun" and len(s["semanal"]["promedio"]) == 7
+    # patron sintetico: sabado y domingo son los dias mas fuertes
+    assert max(range(7), key=lambda i: s["semanal"]["promedio"][i]) in (5, 6)
+    assert len(s["diaria"]["fechas"]) == 98 and len(s["diaria"]["total"]) == 98
+    assert set(s["mensual_por_producto"]) == {"1", "2"} and all(len(v) == len(s["meses"]) for v in s["mensual_por_producto"].values())
+    assert s["ultimo_mes_parcial"] is True  # 2 de noviembre: mes incompleto
+    assert s["primer_mes_parcial"] is True  # el historial sintetico empieza a mitad de mes
+
+
+def test_serie_historica_vacia_sin_ventas():
+    p = _payload(); p["ventas"] = []
+    assert cliente.post("/internal/intelligence/analyze", json=p, headers=H).json()["serie_historica"] == {}
+
+
+def test_no_compara_variaciones_con_historial_corto():
+    corto = cliente.post("/internal/intelligence/analyze", json=_payload(dias=35, ia=False), headers=H).json()
+    assert corto["datos"]["variacion_comparable"] is False
+    assert not any(r["tipo"] in ("crecimiento", "caida") for r in corto["recomendaciones"])
+    largo = cliente.post("/internal/intelligence/analyze", json=_payload(dias=200, ia=False), headers=H).json()
+    assert largo["datos"]["variacion_comparable"] is True and largo["datos"]["dias_periodo"] == 31
