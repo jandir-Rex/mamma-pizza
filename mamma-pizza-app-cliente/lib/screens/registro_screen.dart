@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../core/page_transitions.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/ui_comunes.dart';
 import 'main_shell.dart';
 
 class RegistroScreen extends StatefulWidget {
@@ -32,7 +34,11 @@ class _RegistroScreenState extends State<RegistroScreen> {
   }
 
   Future<void> _manejarRegistro() async {
-    if (!_formKey.currentState!.validate()) return;
+    FocusScope.of(context).unfocus();
+    if (!_formKey.currentState!.validate()) {
+      HapticFeedback.lightImpact();
+      return;
+    }
     setState(() {
       _cargando = true;
       _error = null;
@@ -51,6 +57,7 @@ class _RegistroScreenState extends State<RegistroScreen> {
       );
     } catch (e) {
       if (!mounted) return;
+      HapticFeedback.heavyImpact();
       setState(() => _error = e.toString().replaceFirst("Exception: ", ""));
     } finally {
       if (mounted) setState(() => _cargando = false);
@@ -64,97 +71,100 @@ class _RegistroScreenState extends State<RegistroScreen> {
       appBar: AppBar(title: const Text("Crear cuenta")),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                AnimatedSize(
-                  duration: const Duration(milliseconds: 220),
-                  child: _error != null
-                      ? Container(
-                          padding: const EdgeInsets.all(12),
-                          margin: const EdgeInsets.only(bottom: 16),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFDECEA),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.danger.withOpacity(0.2)),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.error_outline, color: AppColors.danger, size: 18),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(_error!, style: const TextStyle(color: AppColors.danger, fontSize: 13)),
-                              ),
-                            ],
-                          ),
-                        )
-                      : const SizedBox.shrink(),
-                ),
-                TextFormField(
-                  controller: _nombreCtrl,
-                  textInputAction: TextInputAction.next,
-                  decoration: const InputDecoration(
-                    labelText: "Nombre completo",
-                    prefixIcon: Icon(Icons.person_outline, color: AppColors.gray, size: 20),
-                  ),
-                  validator: (v) => (v == null || v.trim().length < 2) ? "Nombre muy corto" : null,
-                ),
-                const SizedBox(height: 14),
-                TextFormField(
-                  controller: _emailCtrl,
-                  keyboardType: TextInputType.emailAddress,
-                  textInputAction: TextInputAction.next,
-                  decoration: const InputDecoration(
-                    labelText: "Email",
-                    prefixIcon: Icon(Icons.mail_outline, color: AppColors.gray, size: 20),
-                  ),
-                  validator: (v) => (v == null || !v.contains("@")) ? "Ingresa un email válido" : null,
-                ),
-                const SizedBox(height: 14),
-                TextFormField(
-                  controller: _telefonoCtrl,
-                  keyboardType: TextInputType.phone,
-                  textInputAction: TextInputAction.next,
-                  decoration: const InputDecoration(
-                    labelText: "Teléfono (opcional)",
-                    prefixIcon: Icon(Icons.phone_outlined, color: AppColors.gray, size: 20),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                TextFormField(
-                  controller: _passwordCtrl,
-                  obscureText: _ocultarPassword,
-                  textInputAction: TextInputAction.done,
-                  onFieldSubmitted: (_) => _manejarRegistro(),
-                  decoration: InputDecoration(
-                    labelText: "Contraseña",
-                    prefixIcon: const Icon(Icons.lock_outline, color: AppColors.gray, size: 20),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _ocultarPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                        color: AppColors.gray,
-                        size: 20,
-                      ),
-                      onPressed: () => setState(() => _ocultarPassword = !_ocultarPassword),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+          child: Aparecer(
+            child: Form(
+              key: _formKey,
+              child: AutofillGroup(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text("Únete a la familia", style: AppFonts.marca(size: 28)),
+                    const SizedBox(height: 4),
+                    Text(
+                      "Crea tu cuenta y pide en segundos.",
+                      style: AppFonts.cuerpo(size: 14, color: AppColors.gray),
                     ),
-                  ),
-                  validator: (v) => (v == null || v.length < 6) ? "Mínimo 6 caracteres" : null,
+                    const SizedBox(height: 24),
+                    CajaError(mensaje: _error),
+                    TextFormField(
+                      controller: _nombreCtrl,
+                      autofocus: true,
+                      textCapitalization: TextCapitalization.words,
+                      textInputAction: TextInputAction.next,
+                      autofillHints: const [AutofillHints.name],
+                      autovalidateMode: AutovalidateMode.onUserInteraction,
+                      decoration: const InputDecoration(
+                        labelText: "Nombre completo",
+                        prefixIcon: Icon(Icons.person_outline, size: 20),
+                      ),
+                      validator: (v) => (v == null || v.trim().length < 2) ? "Nombre muy corto" : null,
+                    ),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _emailCtrl,
+                      keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
+                      autofillHints: const [AutofillHints.email],
+                      autovalidateMode: AutovalidateMode.onUserInteraction,
+                      decoration: const InputDecoration(
+                        labelText: "Email",
+                        prefixIcon: Icon(Icons.mail_outline, size: 20),
+                      ),
+                      validator: (v) {
+                        final t = v?.trim() ?? "";
+                        return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(t)
+                            ? null
+                            : "Ingresa un email válido";
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _telefonoCtrl,
+                      keyboardType: TextInputType.phone,
+                      textInputAction: TextInputAction.next,
+                      autofillHints: const [AutofillHints.telephoneNumber],
+                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ]'))],
+                      decoration: const InputDecoration(
+                        labelText: "Teléfono (opcional)",
+                        prefixIcon: Icon(Icons.phone_outlined, size: 20),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _passwordCtrl,
+                      obscureText: _ocultarPassword,
+                      textInputAction: TextInputAction.done,
+                      autofillHints: const [AutofillHints.newPassword],
+                      autovalidateMode: AutovalidateMode.onUserInteraction,
+                      onFieldSubmitted: (_) => _manejarRegistro(),
+                      decoration: InputDecoration(
+                        labelText: "Contraseña",
+                        helperText: "Mínimo 6 caracteres",
+                        prefixIcon: const Icon(Icons.lock_outline, size: 20),
+                        suffixIcon: IconButton(
+                          tooltip: _ocultarPassword ? "Mostrar contraseña" : "Ocultar contraseña",
+                          icon: Icon(
+                            _ocultarPassword
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                            size: 20,
+                          ),
+                          onPressed: () => setState(() => _ocultarPassword = !_ocultarPassword),
+                        ),
+                      ),
+                      validator: (v) => (v == null || v.length < 6) ? "Mínimo 6 caracteres" : null,
+                    ),
+                    const SizedBox(height: 28),
+                    BotonPrincipal(
+                      texto: "Crear cuenta",
+                      cargando: _cargando,
+                      onPressed: _cargando ? null : _manejarRegistro,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: _cargando ? null : _manejarRegistro,
-                  child: _cargando
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.2),
-                        )
-                      : const Text("Crear cuenta"),
-                ),
-              ],
+              ),
             ),
           ),
         ),

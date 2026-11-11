@@ -4,7 +4,7 @@ class ItemEntrega {
   final int cantidad;
   final double precioUnitario; // ya incluye los agregados
   final String? notas;
-  final String? nombre; // requiere el include del backend (ver nota en la guía)
+  final String? nombre; // requiere el include del backend (INCLUDE_ITEMS_REPARTIDOR)
   final String? tamano;
   final List<String> agregados;
 
@@ -63,6 +63,10 @@ class Entrega {
   final double total;
   final String metodoPago;
   final String pagoEstado;
+
+  /// Con cuánto va a pagar el cliente (solo efectivo). Null = no lo indicó.
+  final double? pagaCon;
+
   final DateTime creadoEn;
   final String? clienteNombre;
   final String? clienteTelefono;
@@ -78,6 +82,7 @@ class Entrega {
     required this.total,
     required this.metodoPago,
     required this.pagoEstado,
+    this.pagaCon,
     required this.creadoEn,
     this.clienteNombre,
     this.clienteTelefono,
@@ -94,6 +99,9 @@ class Entrega {
         total: double.parse(json["total"].toString()),
         metodoPago: json["pago"]?["metodo"] ?? "EFECTIVO",
         pagoEstado: json["pago"]?["estado"] ?? "pendiente",
+        pagaCon: json["pago"]?["pagaCon"] != null
+            ? double.tryParse(json["pago"]["pagaCon"].toString())
+            : null,
         creadoEn: DateTime.tryParse(json["createdAt"]?.toString() ?? "")?.toLocal() ?? DateTime.now(),
         clienteNombre: json["cliente"]?["nombre"],
         clienteTelefono: json["cliente"]?["telefono"],
@@ -110,4 +118,8 @@ class Entrega {
   bool get esEfectivo => metodoPago == "EFECTIVO";
   bool get bloqueada => intentosCodigoFallidos >= AppConfig.maxIntentosCodigo;
   int get totalProductos => items.fold(0, (suma, i) => suma + i.cantidad);
+
+  /// Vuelto que debe llevar el repartidor (null si el cliente no indicó monto)
+  double? get vuelto => (pagaCon != null && pagaCon! >= total) ? pagaCon! - total : null;
+  bool get tieneVuelto => (vuelto ?? 0) > 0;
 }

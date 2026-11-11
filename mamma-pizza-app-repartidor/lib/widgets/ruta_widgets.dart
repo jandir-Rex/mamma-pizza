@@ -348,7 +348,7 @@ class _Paso extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Tarjeta de cobro: efectivo (con calculadora de vuelto) o pago digital
+// Tarjeta de cobro: efectivo (con vuelto del cliente o calculadora) o pago digital
 // ---------------------------------------------------------------------------
 class TarjetaCobro extends StatefulWidget {
   final Entrega entrega;
@@ -373,9 +373,6 @@ class _TarjetaCobroState extends State<TarjetaCobro> {
   Widget build(BuildContext context) {
     final e = widget.entrega;
     if (!e.esEfectivo) return _pagoDigital(e);
-
-    final paga = _paga;
-    final vuelto = paga == null ? null : paga - e.total;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -433,32 +430,88 @@ class _TarjetaCobroState extends State<TarjetaCobro> {
           const SizedBox(height: 12),
           Container(height: 1, color: const Color(0xFFF1D074).withValues(alpha: 0.7)),
           const SizedBox(height: 10),
-          Row(
-            children: [
-              const Text("Paga con:", style: TextStyle(fontSize: 12.5, color: AppColors.gray, fontWeight: FontWeight.w600)),
-              const SizedBox(width: 10),
-              SizedBox(
-                width: 118,
-                child: TextField(
-                  controller: _ctrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  onChanged: (_) => setState(() {}),
-                  style: GoogleFonts.spaceMono(fontWeight: FontWeight.w700, fontSize: 13.5),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    prefixText: "S/. ",
-                    prefixStyle: GoogleFonts.spaceMono(fontWeight: FontWeight.w700, fontSize: 13.5),
-                    hintText: "0.00",
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  ),
-                ),
-              ),
-              const Spacer(),
-              if (vuelto != null) _pildoraVuelto(vuelto),
-            ],
-          ),
+          if (e.pagaCon != null) _datoDelCliente(e) else _calculadoraManual(e),
         ],
       ),
+    );
+  }
+
+  /// El cliente ya dijo con cuánto paga: el vuelto viene calculado
+  Widget _datoDelCliente(Entrega e) {
+    final vuelto = e.vuelto ?? 0;
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "El cliente paga con",
+                style: TextStyle(fontSize: 11.5, color: AppColors.gray, fontWeight: FontWeight.w600),
+              ),
+              Text(
+                soles(e.pagaCon!),
+                style: GoogleFonts.spaceMono(fontWeight: FontWeight.w700, fontSize: 16),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            color: (vuelto > 0 ? AppColors.danger : AppColors.success).withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                vuelto > 0 ? "LLEVA VUELTO" : "MONTO EXACTO",
+                style: TextStyle(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w800,
+                  color: vuelto > 0 ? AppColors.danger : AppColors.success,
+                ),
+              ),
+              if (vuelto > 0)
+                Text(
+                  soles(vuelto),
+                  style: GoogleFonts.spaceMono(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.danger),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// El cliente no indicó monto: calculadora manual como antes
+  Widget _calculadoraManual(Entrega e) {
+    final paga = _paga;
+    final vuelto = paga == null ? null : paga - e.total;
+    return Row(
+      children: [
+        const Text("Paga con:", style: TextStyle(fontSize: 12.5, color: AppColors.gray, fontWeight: FontWeight.w600)),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 118,
+          child: TextField(
+            controller: _ctrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() {}),
+            style: GoogleFonts.spaceMono(fontWeight: FontWeight.w700, fontSize: 13.5),
+            decoration: InputDecoration(
+              isDense: true,
+              prefixText: "S/. ",
+              prefixStyle: GoogleFonts.spaceMono(fontWeight: FontWeight.w700, fontSize: 13.5),
+              hintText: "0.00",
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            ),
+          ),
+        ),
+        const Spacer(),
+        if (vuelto != null) _pildoraVuelto(vuelto),
+      ],
     );
   }
 

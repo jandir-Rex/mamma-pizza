@@ -1,23 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../models/producto.dart';
 import '../models/agregado.dart';
 import '../models/item_carrito.dart';
 import '../providers/carrito_provider.dart';
+import '../widgets/presionable.dart';
+import '../widgets/tony_widgets.dart'; // PizzaPlaceholder + iconoCategoria
+import '../widgets/ui_comunes.dart';
 
 Future<void> mostrarDetalleProducto(
   BuildContext context,
   Producto producto,
   List<Agregado> agregadosDisponibles,
 ) {
-  return showModalBottomSheet(
+  return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    builder: (_) => _DetalleProductoSheet(
+      producto: producto,
+      agregadosDisponibles: agregadosDisponibles,
     ),
-    builder: (_) => _DetalleProductoSheet(producto: producto, agregadosDisponibles: agregadosDisponibles),
   );
 }
 
@@ -35,6 +39,7 @@ class _DetalleProductoSheetState extends State<_DetalleProductoSheet> {
   final Set<int> _agregadosSeleccionados = {};
   final _notasCtrl = TextEditingController();
   int _cantidad = 1;
+  bool _cerrando = false;
 
   @override
   void initState() {
@@ -59,198 +64,244 @@ class _DetalleProductoSheetState extends State<_DetalleProductoSheet> {
     return precio;
   }
 
+  void _agregar() {
+    final messenger = ScaffoldMessenger.of(context);
+    final nombre = widget.producto.nombre;
+    final agregadosElegidos =
+        widget.agregadosDisponibles.where((a) => _agregadosSeleccionados.contains(a.id)).toList();
+
+    context.read<CarritoProvider>().agregar(ItemCarrito(
+          producto: widget.producto,
+          variante: _varianteSeleccionada,
+          agregados: agregadosElegidos,
+          cantidad: _cantidad,
+          notas: _notasCtrl.text.trim(),
+        ));
+
+    HapticFeedback.mediumImpact();
+    Navigator.pop(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 2),
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: AppColors.albahaca, size: 20),
+              const SizedBox(width: 10),
+              Expanded(child: Text("$nombre agregado al pedido")),
+            ],
+          ),
+        ),
+      );
+  }
+
+  Widget _titulo(String texto) => Padding(
+        padding: const EdgeInsets.only(top: 20, bottom: 10),
+        child: Text(texto, style: AppFonts.titulo(size: 22)),
+      );
+
   @override
   Widget build(BuildContext context) {
+    final producto = widget.producto;
     final agregadosCompatibles = widget.agregadosDisponibles
         .where((a) => a.disponible && a.precioParaTamano(_varianteSeleccionada.tamano) != null)
         .toList();
+    final anchoImagen = MediaQuery.of(context).size.width - 40;
 
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: DraggableScrollableSheet(
-        initialChildSize: 0.75,
-        minChildSize: 0.4,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (context, scrollController) => SingleChildScrollView(
-          controller: scrollController,
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      child: NotificationListener<DraggableScrollableNotification>(
+        onNotification: (n) {
+          // Arrastrar hasta abajo cierra la hoja.
+          if (!_cerrando && n.extent <= n.minExtent + 0.01) {
+            _cerrando = true;
+            Navigator.of(context).maybePop();
+          }
+          return false;
+        },
+        child: DraggableScrollableSheet(
+          initialChildSize: 0.85,
+          minChildSize: 0.45,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (context, scrollController) => Column(
             children: [
               Center(
                 child: Container(
                   width: 40,
                   height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
+                  margin: const EdgeInsets.only(top: 10, bottom: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE8E2DA),
+                    color: AppColors.border,
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
               ),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(widget.producto.nombre,
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.dark)),
-                  ),
-                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
-                ],
-              ),
-              if (widget.producto.descripcion != null)
-                Text(widget.producto.descripcion!, style: const TextStyle(color: AppColors.gray)),
-              const SizedBox(height: 20),
-
-              const Text("Elige el tamaño", style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              ...widget.producto.variantes.map((v) {
-                final seleccionado = v.id == _varianteSeleccionada.id;
-                return Opacity(
-                  opacity: v.disponible ? 1 : 0.4,
-                  child: GestureDetector(
-                    onTap: v.disponible
-                        ? () => setState(() {
-                              _varianteSeleccionada = v;
-                              _agregadosSeleccionados.clear();
-                            })
-                        : null,
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: seleccionado ? AppColors.primary.withOpacity(0.08) : Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: seleccionado ? AppColors.primary : const Color(0xFFE8E2DA),
-                          width: seleccionado ? 1.6 : 1,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            seleccionado ? Icons.radio_button_checked : Icons.radio_button_off,
-                            color: seleccionado ? AppColors.primary : AppColors.gray,
-                            size: 20,
+              Expanded(
+                child: ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                  children: [
+                    Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(AppRadius.medio),
+                          child: PizzaPlaceholder(
+                            width: anchoImagen,
+                            height: 190,
+                            radius: AppRadius.medio,
+                            iconSize: 64,
+                            icono: iconoCategoria(producto.categoriaNombre),
+                            imagenUrl: producto.imagenUrl,
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              v.disponible ? _capitalizar(v.tamano) : "${_capitalizar(v.tamano)} — Agotado",
-                              style: const TextStyle(fontSize: 14),
+                        ),
+                        Positioned(
+                          top: 2,
+                          right: 2,
+                          child: Presionable(
+                            onTap: () => Navigator.pop(context),
+                            haptico: Haptico.ligero,
+                            etiquetaSemantica: "Cerrar",
+                            child: SizedBox(
+                              width: 48,
+                              height: 48,
+                              child: Center(
+                                child: Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                    boxShadow: AppShadows.suave,
+                                  ),
+                                  child: const Icon(Icons.close_rounded, size: 20, color: AppColors.dark),
+                                ),
+                              ),
                             ),
                           ),
-                          Text("S/. ${v.precio.toStringAsFixed(2)}",
-                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }),
-
-              if (agregadosCompatibles.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                const Text("Agregados", style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 4),
-                ...agregadosCompatibles.map((ag) {
-                  final precio = ag.precioParaTamano(_varianteSeleccionada.tamano)!;
-                  final marcado = _agregadosSeleccionados.contains(ag.id);
-                  return GestureDetector(
-                    onTap: () => setState(() {
-                      if (marcado) {
-                        _agregadosSeleccionados.remove(ag.id);
-                      } else {
-                        _agregadosSeleccionados.add(ag.id);
-                      }
-                    }),
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: marcado ? AppColors.primary.withOpacity(0.08) : Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: marcado ? AppColors.primary : const Color(0xFFE8E2DA),
-                          width: marcado ? 1.6 : 1,
                         ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            marcado ? Icons.check_box : Icons.check_box_outline_blank,
-                            color: marcado ? AppColors.primary : AppColors.gray,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(child: Text(ag.nombre, style: const TextStyle(fontSize: 14))),
-                          Text("+ S/. ${precio.toStringAsFixed(2)}",
-                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                        ],
-                      ),
+                      ],
                     ),
-                  );
-                }),
-              ],
-
-              const SizedBox(height: 16),
-              const Text("Instrucciones especiales", style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 6),
-              TextField(
-                controller: _notasCtrl,
-                maxLines: 2,
-                decoration: const InputDecoration(hintText: "Ej. sin cebolla, cortar en 12..."),
-              ),
-
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text("Cantidad", style: TextStyle(fontWeight: FontWeight.bold)),
-                  Row(
-                    children: [
-                      IconButton(
-                        onPressed: _cantidad > 1 ? () => setState(() => _cantidad--) : null,
-                        icon: const Icon(Icons.remove_circle_outline),
-                      ),
-                      Text("$_cantidad", style: const TextStyle(fontSize: 16)),
-                      IconButton(
-                        onPressed: () => setState(() => _cantidad++),
-                        icon: const Icon(Icons.add_circle_outline, color: AppColors.primary),
+                    const SizedBox(height: 16),
+                    Text(producto.nombre, style: AppFonts.titulo(size: 32)),
+                    if (producto.descripcion != null && producto.descripcion!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        producto.descripcion!,
+                        style: AppFonts.cuerpo(size: 14, color: AppColors.gray, altura: 1.45),
                       ),
                     ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
 
-              ElevatedButton(
-                onPressed: () {
-                  final agregadosElegidos = widget.agregadosDisponibles
-                      .where((a) => _agregadosSeleccionados.contains(a.id))
-                      .toList();
+                    _titulo("Elige el tamaño"),
+                    ...producto.variantes.map((v) {
+                      final seleccionado = v.id == _varianteSeleccionada.id;
+                      return TarjetaSeleccion(
+                        activo: seleccionado,
+                        habilitado: v.disponible,
+                        onTap: () => setState(() {
+                          _varianteSeleccionada = v;
+                          _agregadosSeleccionados.clear();
+                        }),
+                        child: Row(
+                          children: [
+                            IndicadorSeleccion(activo: seleccionado),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    capitalizar(v.tamano),
+                                    style: AppFonts.cuerpo(size: 14, peso: FontWeight.w600),
+                                  ),
+                                  if (!v.disponible)
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.block, size: 13, color: AppColors.danger),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          "Agotado",
+                                          style: AppFonts.cuerpo(
+                                            size: 12,
+                                            peso: FontWeight.w600,
+                                            color: AppColors.danger,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                ],
+                              ),
+                            ),
+                            Text("S/. ${v.precio.toStringAsFixed(2)}", style: AppFonts.precio(size: 20)),
+                          ],
+                        ),
+                      );
+                    }),
 
-                  context.read<CarritoProvider>().agregar(ItemCarrito(
-                        producto: widget.producto,
-                        variante: _varianteSeleccionada,
-                        agregados: agregadosElegidos,
-                        cantidad: _cantidad,
-                        notas: _notasCtrl.text.trim(),
-                      ));
-                  Navigator.pop(context);
-                },
-                child: Text("Agregar al pedido — S/. ${(_precioUnitario * _cantidad).toStringAsFixed(2)}"),
+                    if (agregadosCompatibles.isNotEmpty) ...[
+                      _titulo("Agregados"),
+                      ...agregadosCompatibles.map((ag) {
+                        final precio = ag.precioParaTamano(_varianteSeleccionada.tamano)!;
+                        final marcado = _agregadosSeleccionados.contains(ag.id);
+                        return TarjetaSeleccion(
+                          activo: marcado,
+                          onTap: () => setState(() {
+                            if (marcado) {
+                              _agregadosSeleccionados.remove(ag.id);
+                            } else {
+                              _agregadosSeleccionados.add(ag.id);
+                            }
+                          }),
+                          child: Row(
+                            children: [
+                              IndicadorSeleccion(activo: marcado, cuadrado: true),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(ag.nombre, style: AppFonts.cuerpo(size: 14, peso: FontWeight.w500)),
+                              ),
+                              Text(
+                                "+ S/. ${precio.toStringAsFixed(2)}",
+                                style: AppFonts.cuerpo(size: 13, peso: FontWeight.w600, color: AppColors.primary),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+
+                    _titulo("Instrucciones especiales"),
+                    TextField(
+                      controller: _notasCtrl,
+                      maxLines: 2,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: const InputDecoration(hintText: "Ej. sin cebolla, cortar en 12..."),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 8),
+              BarraInferior(
+                child: Row(
+                  children: [
+                    SelectorCantidad(
+                      cantidad: _cantidad,
+                      onMenos: _cantidad > 1 ? () => setState(() => _cantidad--) : null,
+                      onMas: () => setState(() => _cantidad++),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: BotonPrincipal(
+                        texto: "Agregar · S/. ${(_precioUnitario * _cantidad).toStringAsFixed(2)}",
+                        onPressed: _varianteSeleccionada.disponible ? _agregar : null,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
       ),
     );
   }
-}
-
-String _capitalizar(String texto) {
-  final limpio = texto.replaceAll("_", " ");
-  return limpio[0].toUpperCase() + limpio.substring(1);
 }

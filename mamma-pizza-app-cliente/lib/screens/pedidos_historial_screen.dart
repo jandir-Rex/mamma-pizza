@@ -1,11 +1,14 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/theme.dart';
+import '../core/page_transitions.dart';
 import '../models/pedido.dart';
 import '../services/pedidos_service.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/presionable.dart';
 import '../widgets/seguimiento_pedido_widget.dart';
+import '../widgets/ui_comunes.dart';
+import 'seguimiento_screen.dart';
 
 class PedidosHistorialScreen extends StatefulWidget {
   const PedidosHistorialScreen({super.key});
@@ -25,50 +28,113 @@ class _PedidosHistorialScreenState extends State<PedidosHistorialScreen> {
     _cargarPedidos();
   }
 
-  Future<void> _cargarPedidos() async {
-    setState(() {
-      _cargando = true;
-      _error = null;
-    });
+  Future<void> _cargarPedidos({bool silencioso = false}) async {
+    if (!silencioso) {
+      setState(() {
+        _cargando = true;
+        _error = null;
+      });
+    }
 
     try {
-      // Obtener el usuario actual para verificar autenticación
-      final authProvider = context.read<AuthProvider>();
-      final usuario = authProvider.usuario;
-      
+      // Verificar autenticación
+      final usuario = context.read<AuthProvider>().usuario;
       if (usuario == null) {
+        if (!mounted) return;
         setState(() {
-          _error = "No estás autenticado";
+          _error = "Inicia sesión para ver tus pedidos.";
           _cargando = false;
         });
         return;
       }
 
-      print('📦 Cargando pedidos para usuario: ${usuario.email}');
-      
-      // Obtener todos los pedidos
       final pedidos = await PedidosService.misPedidos();
-      
-      print('✅ Se obtuvieron ${pedidos.length} pedidos');
-      
-      // Ordenar por fecha (más reciente primero)
+
+      // Más reciente primero
       pedidos.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-      if (mounted) {
+      if (!mounted) return;
+      setState(() {
+        _pedidos = pedidos;
+        _error = null;
+        _cargando = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      if (_pedidos.isEmpty) {
         setState(() {
-          _pedidos = pedidos;
+          _error = "No pudimos cargar tus pedidos.";
           _cargando = false;
         });
-      }
-    } catch (e) {
-      print('❌ Error al cargar pedidos: $e');
-      if (mounted) {
-        setState(() {
-          _error = "Error al cargar pedidos: $e";
-          _cargando = false;
-        });
+      } else {
+        setState(() => _cargando = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("No se pudo actualizar tus pedidos")),
+        );
       }
     }
+  }
+
+  Widget _cuerpo() {
+    if (_cargando) {
+      return ListView(
+        key: const ValueKey("carga"),
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+        children: const [
+          EsqueletoTarjeta(alto: 120),
+          EsqueletoTarjeta(alto: 120),
+          EsqueletoTarjeta(alto: 120),
+        ],
+      );
+    }
+
+    if (_error != null) {
+      return EstadoError(
+        key: const ValueKey("error"),
+        mensaje: _error!,
+        onReintentar: _cargarPedidos,
+      );
+    }
+
+    if (_pedidos.isEmpty) {
+      return const EstadoVacio(
+        key: ValueKey("vacio"),
+        emoji: "🍕",
+        titulo: "Todavía no tienes pedidos",
+        mensaje: "Cuando hagas tu primer pedido lo verás aquí, con su seguimiento en vivo.",
+      );
+    }
+
+    final activos = _pedidos.where((p) => EstadoPedidoUI.esActivo(p.estado)).toList();
+    final anteriores = _pedidos.where((p) => !EstadoPedidoUI.esActivo(p.estado)).toList();
+
+    final filas = <Widget>[];
+    var n = 0;
+    if (activos.isNotEmpty) {
+      filas.add(_TituloSeccion(texto: "En curso", cantidad: activos.length));
+      for (final p in activos) {
+        filas.add(Aparecer(indice: n++, child: _TarjetaPedido(pedido: p)));
+      }
+    }
+    if (anteriores.isNotEmpty) {
+      filas.add(_TituloSeccion(texto: "Anteriores", cantidad: anteriores.length));
+      for (final p in anteriores) {
+        filas.add(Aparecer(indice: n++, child: _TarjetaPedido(pedido: p)));
+      }
+    }
+
+    return RefreshIndicator(
+      key: const ValueKey("lista"),
+      onRefresh: () => _cargarPedidos(silencioso: true),
+      color: AppColors.primary,
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 120),
+        itemCount: filas.length,
+        itemBuilder: (context, i) => filas[i],
+      ),
+    );
   }
 
   @override
@@ -76,90 +142,16 @@ class _PedidosHistorialScreenState extends State<PedidosHistorialScreen> {
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: SafeArea(
+        bottom: false,
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-              child: Row(
-                children: [
-                  const Text(
-                    "Mis pedidos",
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.dark,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.refresh, color: AppColors.primary),
-                    onPressed: _cargarPedidos,
-                  ),
-                ],
-              ),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Text("Mis pedidos", style: AppFonts.titulo(size: 32)),
             ),
-
-            // Contenido
             Expanded(
-              child: _cargando
-                  ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-                  : _error != null
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.error_outline, size: 64, color: AppColors.danger),
-                              const SizedBox(height: 16),
-                              Text(
-                                _error!,
-                                style: const TextStyle(color: AppColors.danger),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 16),
-                              ElevatedButton(
-                                onPressed: _cargarPedidos,
-                                child: const Text("Reintentar"),
-                              ),
-                            ],
-                          ),
-                        )
-                      : _pedidos.isEmpty
-                          ? Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Text("🍕", style: TextStyle(fontSize: 64)),
-                                  const SizedBox(height: 16),
-                                  const Text(
-                                    "Todavía no tienes pedidos",
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.dark,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  const Text(
-                                    "Realiza tu primer pedido para verlo aquí",
-                                    style: TextStyle(color: AppColors.gray),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ],
-                              ),
-                            )
-                          : RefreshIndicator(
-                              onRefresh: _cargarPedidos,
-                              color: AppColors.primary,
-                              child: ListView.builder(
-                                padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                                itemCount: _pedidos.length,
-                                itemBuilder: (context, index) {
-                                  final pedido = _pedidos[index];
-                                  return _TarjetaPedido(pedido: pedido);
-                                },
-                              ),
-                            ),
+              child: AnimatedSwitcher(duration: AppMotion.normal, child: _cuerpo()),
             ),
           ],
         ),
@@ -168,119 +160,134 @@ class _PedidosHistorialScreenState extends State<PedidosHistorialScreen> {
   }
 }
 
-class _TarjetaPedido extends StatelessWidget {
-  final Pedido pedido;
-
-  const _TarjetaPedido({required this.pedido});
+class _TituloSeccion extends StatelessWidget {
+  final String texto;
+  final int cantidad;
+  const _TituloSeccion({required this.texto, required this.cantidad});
 
   @override
   Widget build(BuildContext context) {
-    final colorEstado = EstadoPedidoUI.color(pedido.estado);
-    final esActivo = pedido.estado != "ENTREGADO" && pedido.estado != "CANCELADO";
+    return Padding(
+      padding: const EdgeInsets.only(top: 12, bottom: 12),
+      child: Row(
+        children: [
+          Text(texto, style: AppFonts.titulo(size: 22)),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: AppColors.kraftLight,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              "$cantidad",
+              style: AppFonts.cuerpo(size: 12, peso: FontWeight.w700, color: AppColors.cacaoDark),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TarjetaPedido extends StatelessWidget {
+  final Pedido pedido;
+  const _TarjetaPedido({required this.pedido});
+
+  void _verDetalle(BuildContext context) {
+    Navigator.of(context).push(deslizarDesdeDerecha(SeguimientoScreen(pedidoId: pedido.id)));
+  }
+
+  String _fecha(DateTime d) =>
+      "${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}";
+
+  @override
+  Widget build(BuildContext context) {
+    final esActivo = EstadoPedidoUI.esActivo(pedido.estado);
+    final esDelivery = pedido.canal == "DELIVERY";
+
+    final contenido = esActivo
+        ? Padding(
+            padding: const EdgeInsets.all(16),
+            child: SeguimientoPedidoWidget(
+              pedido: pedido,
+              onVerDetalles: () => _verDetalle(context),
+            ),
+          )
+        : Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        "Pedido #${pedido.codigo}",
+                        style: AppFonts.cuerpo(size: 15, peso: FontWeight.w700),
+                      ),
+                    ),
+                    InsigniaEstado(estado: pedido.estado),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Icon(
+                      esDelivery ? Icons.delivery_dining : Icons.storefront,
+                      size: 18,
+                      color: AppColors.gray,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      "${esDelivery ? "Delivery" : "Recojo"} · ${pedido.cantidadItems} items",
+                      style: AppFonts.cuerpo(size: 12, color: AppColors.gray),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const Divider(height: 1),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _fecha(pedido.createdAt),
+                        style: AppFonts.cuerpo(size: 12, color: AppColors.gray),
+                      ),
+                    ),
+                    Text(
+                      "S/. ${pedido.total.toStringAsFixed(2)}",
+                      style: AppFonts.precio(size: 24),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.chevron_right_rounded, color: AppColors.gray, size: 22),
+                  ],
+                ),
+              ],
+            ),
+          );
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.hairline),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        borderRadius: AppRadius.bMedio,
+        border: Border.all(
+          color: esActivo
+              ? EstadoPedidoUI.color(pedido.estado).withValues(alpha: 0.5)
+              : AppColors.border,
+          width: esActivo ? 1.4 : 1,
+        ),
+        boxShadow: AppShadows.suave,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Si es pedido activo, mostrar seguimiento completo
-          if (esActivo)
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: SeguimientoPedidoWidget(
-                pedido: pedido,
-                onVerDetalles: () {
-                  // Aquí puedes navegar al detalle completo
-                },
-              ),
-            )
-          else
-            // Si es pedido completado/cancelado, mostrar versión simplificada
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        "Pedido #${pedido.codigo}",
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.dark,
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: colorEstado.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          EstadoPedidoUI.etiqueta(pedido.estado),
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: colorEstado,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Icon(
-                        pedido.canal == "DELIVERY" ? Icons.delivery_dining : Icons.storefront,
-                        size: 16,
-                        color: AppColors.gray,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        "${pedido.canal == "DELIVERY" ? "Delivery" : "Recojo"} · ${pedido.cantidadItems} items",
-                        style: const TextStyle(color: AppColors.gray, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  const Divider(height: 1),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        "${pedido.createdAt.day}/${pedido.createdAt.month}/${pedido.createdAt.year}",
-                        style: const TextStyle(color: AppColors.gray, fontSize: 12),
-                      ),
-                      Text(
-                        "S/. ${pedido.total.toStringAsFixed(2)}",
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+      child: esActivo
+          ? contenido
+          : Presionable(
+              onTap: () => _verDetalle(context),
+              etiquetaSemantica: "Ver pedido ${pedido.codigo}",
+              child: contenido,
             ),
-        ],
-      ),
     );
   }
 }

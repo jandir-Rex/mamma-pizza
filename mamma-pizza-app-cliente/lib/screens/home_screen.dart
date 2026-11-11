@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../models/producto.dart';
 import '../models/agregado.dart';
 import '../services/productos_service.dart';
 import '../providers/auth_provider.dart';
-import '../widgets/pizza_loading.dart';
+import '../widgets/presionable.dart';
 import '../widgets/tony_widgets.dart';
+import '../widgets/ui_comunes.dart';
 import 'producto_detalle_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -21,6 +23,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Producto> _productos = [];
   List<Agregado> _agregados = [];
   bool _cargando = true;
+  bool _error = false;
 
   @override
   void initState() {
@@ -28,22 +31,32 @@ class _HomeScreenState extends State<HomeScreen> {
     _cargar();
   }
 
-  Future<void> _cargar() async {
+  Future<void> _cargar({bool silencioso = false}) async {
+    if (!silencioso && mounted) {
+      setState(() {
+        _cargando = true;
+        _error = false;
+      });
+    }
     try {
       final p = await ProductosService.obtenerMenu();
       List<Agregado> a = [];
       try {
         a = await ProductosService.obtenerAgregados();
       } catch (_) {}
-      if (mounted) {
-        setState(() {
-          _productos = p;
-          _agregados = a;
-          _cargando = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _productos = p;
+        _agregados = a;
+        _cargando = false;
+        _error = false;
+      });
     } catch (_) {
-      if (mounted) setState(() => _cargando = false);
+      if (!mounted) return;
+      setState(() {
+        _cargando = false;
+        _error = _productos.isEmpty;
+      });
     }
   }
 
@@ -52,6 +65,47 @@ class _HomeScreenState extends State<HomeScreen> {
     if (h < 12) return "Buenos días,";
     if (h < 19) return "Buenas tardes,";
     return "Buenas noches,";
+  }
+
+  Widget _recomendados(List<Producto> recomendados) {
+    if (_cargando) {
+      return const Column(
+        key: ValueKey("rec-carga"),
+        children: [
+          EsqueletoTarjeta(alto: 104),
+          EsqueletoTarjeta(alto: 104),
+          EsqueletoTarjeta(alto: 104),
+        ],
+      );
+    }
+    if (_error) {
+      return EstadoError(
+        key: const ValueKey("rec-error"),
+        mensaje: "No pudimos cargar el menú.",
+        onReintentar: _cargar,
+      );
+    }
+    if (recomendados.isEmpty) {
+      return const EstadoVacio(
+        key: ValueKey("rec-vacio"),
+        emoji: "🍕",
+        titulo: "Pronto habrá recomendados",
+        mensaje: "Estamos preparando algo rico para ti.",
+      );
+    }
+    return Column(
+      key: const ValueKey("rec-lista"),
+      children: [
+        for (var i = 0; i < recomendados.length; i++)
+          Aparecer(
+            indice: i,
+            child: TarjetaProducto(
+              producto: recomendados[i],
+              onTap: () => mostrarDetalleProducto(context, recomendados[i], _agregados),
+            ),
+          ),
+      ],
+    );
   }
 
   @override
@@ -63,245 +117,260 @@ class _HomeScreenState extends State<HomeScreen> {
         .take(3)
         .toList();
 
-    return Scaffold(
-      backgroundColor: AppColors.bg,
-      body: SafeArea(
-        child: _cargando
-            ? const Center(child: PizzaLoading(mensaje: "Cargando..."))
-            : SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
-                            Text("MammaPizza", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.primary)),
-                            Text("PIZZERÍA", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.dark, letterSpacing: 2)),
-                          ],
-                        ),
-                        const Spacer(),
-                      ],
-                    ),
-                    const SizedBox(height: 22),
-
-                    // Saludo
-                    Text(_saludo(),
-                        style: const TextStyle(
-                            fontSize: 14, color: AppColors.gray)),
-                    const SizedBox(height: 2),
-                    Text(
-                      nombre.isEmpty ? "👋" : "$nombre 👋",
-                      style: const TextStyle(
-                          fontSize: 30,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.dark,
-                          height: 1.1),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text("¿Qué antojo tienes hoy?",
-                        style: TextStyle(fontSize: 14, color: AppColors.gray)),
-                    const SizedBox(height: 16),
-
-                    // Buscador
-                    GestureDetector(
-                      onTap: () => widget.onVerMenu("Todas"),
-                      child: Container(
-                        height: 46,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.search, color: AppColors.dark, size: 20),
-                            SizedBox(width: 10),
-                            Text("Buscar pizzas, bebidas, etc...",
-                                style: TextStyle(
-                                    color: AppColors.gray, fontSize: 14)),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-
-                    // Banner
-                    Container(
-                      height: 172,
-                      width: double.infinity,
-                      clipBehavior: Clip.antiAlias,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(22),
-                        gradient: const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [Color(0xFFB71C1C), Color(0xFF7F1214)],
-                        ),
-                      ),
-                      child: Stack(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        backgroundColor: AppColors.bg,
+        body: RefreshIndicator(
+          color: AppColors.primary,
+          onRefresh: () => _cargar(silencioso: true),
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.only(bottom: 110),
+            children: [
+              _Cabecera(
+                saludo: _saludo(),
+                nombre: nombre,
+                onBuscar: () => widget.onVerMenu("Todas"),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                child: Aparecer(indice: 1, child: _Banner(onVerMenu: () => widget.onVerMenu("Todas"))),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                child: Aparecer(
+                  indice: 2,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         children: [
-                          Positioned(
-                            right: -34,
-                            top: 0,
-                            bottom: 0,
-                            child: Center(
-                              child: Container(
-                                width: 170,
-                                height: 170,
-                                decoration: const BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [
-                                      Color(0xFFF7DDB4),
-                                      Color(0xFFE9B56E)
-                                    ],
-                                  ),
-                                ),
-                                child: const Icon(Icons.local_pizza,
-                                    size: 96, color: AppColors.primary),
-                              ),
+                          Expanded(child: Text("Categorías", style: AppFonts.titulo(size: 24))),
+                          TextButton(
+                            onPressed: () => widget.onVerMenu("Todas"),
+                            child: const Text("Ver todas"),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _CatItem(
+                              icon: Icons.local_pizza,
+                              label: "Pizzas",
+                              onTap: () => widget.onVerMenu("Pizzas"),
                             ),
                           ),
-                          Padding(
-                            padding: const EdgeInsets.all(18),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Text("La verdadera",
-                                    style: TextStyle(
-                                        color: Colors.white, fontSize: 15)),
-                                const Text(
-                                  "pizza, siempre",
-                                  style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 23,
-                                      fontWeight: FontWeight.w800,
-                                      height: 1.15),
-                                ),
-                                const Text("es una buena idea",
-                                    style: TextStyle(
-                                        color: Colors.white, fontSize: 15)),
-                                const SizedBox(height: 8),
-                                Container(
-                                    width: 64,
-                                    height: 2,
-                                    color: AppColors.gold),
-                                const SizedBox(height: 12),
-                                GestureDetector(
-                                  onTap: () => widget.onVerMenu("Todas"),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 16, vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: const Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text("Ver menú",
-                                            style: TextStyle(
-                                                color: AppColors.primary,
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.w700)),
-                                        SizedBox(width: 6),
-                                        Icon(Icons.arrow_forward,
-                                            color: AppColors.primary, size: 14),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
+                          Expanded(
+                            child: _CatItem(
+                              icon: Icons.restaurant,
+                              label: "Entradas",
+                              onTap: () => widget.onVerMenu("Entradas"),
+                            ),
+                          ),
+                          Expanded(
+                            child: _CatItem(
+                              icon: Icons.local_drink,
+                              label: "Bebidas",
+                              onTap: () => widget.onVerMenu("Bebidas"),
+                            ),
+                          ),
+                          Expanded(
+                            child: _CatItem(
+                              icon: Icons.cake,
+                              label: "Postres",
+                              onTap: () => widget.onVerMenu("Postres"),
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 24),
+                    ],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 28, 20, 12),
+                child: Text("Recomendados para ti", style: AppFonts.titulo(size: 24)),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: AnimatedSwitcher(
+                  duration: AppMotion.normal,
+                  child: _recomendados(recomendados),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
-                    // Categorías
-                    Row(
-                      children: [
-                        const Text("Categorías",
-                            style: TextStyle(
-                                fontSize: 19,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.dark)),
-                        const Spacer(),
-                        GestureDetector(
-                          onTap: () => widget.onVerMenu("Todas"),
-                          child: const Row(
-                            children: [
-                              Text("Ver todas",
-                                  style: TextStyle(
-                                      color: AppColors.primary,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600)),
-                              SizedBox(width: 4),
-                              Icon(Icons.arrow_forward,
-                                  color: AppColors.primary, size: 14),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _CatItem(
-                            icon: Icons.local_pizza,
-                            label: "Pizzas",
-                            activo: true,
-                            onTap: () => widget.onVerMenu("Pizzas")),
-                        _CatItem(
-                            icon: Icons.restaurant,
-                            label: "Entradas",
-                            onTap: () => widget.onVerMenu("Entradas")),
-                        _CatItem(
-                            icon: Icons.local_drink,
-                            label: "Bebidas",
-                            onTap: () => widget.onVerMenu("Bebidas")),
-                        _CatItem(
-                            icon: Icons.cake,
-                            label: "Postres",
-                            onTap: () => widget.onVerMenu("Postres")),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
+class _Cabecera extends StatelessWidget {
+  final String saludo;
+  final String nombre;
+  final VoidCallback onBuscar;
+  const _Cabecera({required this.saludo, required this.nombre, required this.onBuscar});
 
-                    // Recomendados
-                    const Text("Recomendados para ti",
-                        style: TextStyle(
-                            fontSize: 19,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.dark)),
-                    const SizedBox(height: 12),
-                    if (recomendados.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 24),
-                        child: Center(
-                            child: Text(
-                                "Pronto tendremos recomendaciones para ti",
-                                style: TextStyle(color: AppColors.gray))),
-                      )
-                    else
-                      ...recomendados.map(
-                        (p) => TarjetaProducto(
-                          producto: p,
-                          onTap: () =>
-                              mostrarDetalleProducto(context, p, _agregados),
-                        ),
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+      decoration: const BoxDecoration(
+        gradient: AppGradients.cacao,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(AppRadius.grande)),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 12),
+            Text("Mamma Pizza", style: AppFonts.marca(size: 22, color: AppColors.kraft)),
+            Text(
+              "El sabor de la felicidad",
+              style: AppFonts.cuerpo(size: 12, color: AppColors.kraftLight),
+            ),
+            const SizedBox(height: 22),
+            Text(saludo, style: AppFonts.cuerpo(size: 14, color: AppColors.kraftLight)),
+            const SizedBox(height: 2),
+            Text(
+              nombre.isEmpty ? "¡Hola! 👋" : "$nombre 👋",
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppFonts.marca(size: 32, color: Colors.white),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "¿Qué antojo tienes hoy?",
+              style: AppFonts.cuerpo(size: 14, color: AppColors.kraftLight),
+            ),
+            const SizedBox(height: 18),
+            Presionable(
+              onTap: onBuscar,
+              etiquetaSemantica: "Buscar en el menú",
+              child: Container(
+                height: 52,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: AppShadows.suave,
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.search, color: AppColors.cacao, size: 22),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        "Buscar pizzas, bebidas, etc...",
+                        style: AppFonts.cuerpo(size: 14, color: AppColors.gray),
                       ),
+                    ),
                   ],
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Banner extends StatelessWidget {
+  final VoidCallback onVerMenu;
+  const _Banner({required this.onVerMenu});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: 168),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        gradient: AppGradients.kraft,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.kraftDark.withValues(alpha: 0.5)),
+        boxShadow: AppShadows.suave,
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -34,
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: Container(
+                width: 150,
+                height: 150,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: AppGradients.cacao,
+                ),
+                child: const ExcludeSemantics(
+                  child: Icon(Icons.local_pizza, size: 80, color: AppColors.kraft),
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 18, 130, 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.tomate,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    "Hecha al momento",
+                    style: AppFonts.cuerpo(size: 12, peso: FontWeight.w600, color: Colors.white),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  "El sabor de la felicidad",
+                  style: AppFonts.marca(size: 22, color: AppColors.cacaoDark),
+                ),
+                const SizedBox(height: 12),
+                Presionable(
+                  onTap: onVerMenu,
+                  haptico: Haptico.ligero,
+                  etiquetaSemantica: "Ver menú",
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 48),
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    decoration: BoxDecoration(
+                      color: AppColors.tomate,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: AppShadows.brillo(AppColors.tomate),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          "Ver menú",
+                          style: AppFonts.cuerpo(size: 14, peso: FontWeight.w600, color: Colors.white),
+                        ),
+                        const SizedBox(width: 6),
+                        const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 16),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -310,49 +379,36 @@ class _HomeScreenState extends State<HomeScreen> {
 class _CatItem extends StatelessWidget {
   final IconData icon;
   final String label;
-  final bool activo;
   final VoidCallback onTap;
-  const _CatItem(
-      {required this.icon,
-      required this.label,
-      required this.onTap,
-      this.activo = false});
+  const _CatItem({required this.icon, required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Presionable(
       onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: activo
-                  ? AppColors.primary
-                  : Colors.white.withValues(alpha: 0.8),
-              borderRadius: BorderRadius.circular(18),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
-                ),
-              ],
+      etiquetaSemantica: "Categoría $label",
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 68,
+              height: 68,
+              decoration: BoxDecoration(
+                color: AppColors.kraftLight,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppColors.kraft),
+              ),
+              child: Icon(icon, color: AppColors.cacao, size: 30),
             ),
-            child: Icon(icon,
-                color: activo ? Colors.white : AppColors.primary, size: 30),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: activo ? FontWeight.w700 : FontWeight.w500,
-              color: activo ? AppColors.primary : AppColors.dark,
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: AppFonts.cuerpo(size: 12, peso: FontWeight.w600),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

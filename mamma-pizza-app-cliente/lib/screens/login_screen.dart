@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../core/page_transitions.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/ui_comunes.dart';
 import 'registro_screen.dart';
 import 'main_shell.dart';
 
@@ -29,7 +31,11 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _manejarLogin() async {
-    if (!_formKey.currentState!.validate()) return;
+    FocusScope.of(context).unfocus();
+    if (!_formKey.currentState!.validate()) {
+      HapticFeedback.lightImpact();
+      return;
+    }
     setState(() {
       _cargando = true;
       _error = null;
@@ -43,6 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     } catch (e) {
       if (!mounted) return;
+      HapticFeedback.heavyImpact();
       setState(() => _error = e.toString().replaceFirst("Exception: ", ""));
     } finally {
       if (mounted) setState(() => _cargando = false);
@@ -51,138 +58,149 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.bg,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 84,
-                    height: 84,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [AppColors.primary, AppColors.primary],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withOpacity(0.25),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: const Center(child: Text("🍕", style: TextStyle(fontSize: 40))),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    "Mamma Pizza",
-                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.dark),
-                  ),
-                  const SizedBox(height: 2),
-                  const Text(
-                    "El sabor de la felicidad",
-                    style: TextStyle(color: AppColors.gray, fontSize: 13, fontStyle: FontStyle.italic),
-                  ),
-                  const SizedBox(height: 36),
-
-                  AnimatedSize(
-                    duration: const Duration(milliseconds: 220),
-                    child: _error != null
-                        ? Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            margin: const EdgeInsets.only(bottom: 16),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFDECEA),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppColors.danger.withOpacity(0.2)),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        backgroundColor: AppColors.bg,
+        body: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          child: Column(
+            children: [
+              const _CabeceraMarca(),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+                child: Aparecer(
+                  indice: 2,
+                  child: Form(
+                    key: _formKey,
+                    child: AutofillGroup(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text("Bienvenido de vuelta", style: AppFonts.titulo(size: 30)),
+                          const SizedBox(height: 4),
+                          Text(
+                            "Ingresa para pedir tu pizza favorita",
+                            style: AppFonts.cuerpo(size: 14, color: AppColors.gray),
+                          ),
+                          const SizedBox(height: 24),
+                          CajaError(mensaje: _error),
+                          TextFormField(
+                            controller: _emailCtrl,
+                            keyboardType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
+                            autofillHints: const [AutofillHints.email],
+                            autovalidateMode: AutovalidateMode.onUserInteraction,
+                            decoration: const InputDecoration(
+                              labelText: "Email",
+                              prefixIcon: Icon(Icons.mail_outline, size: 20),
                             ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.error_outline, color: AppColors.danger, size: 18),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    _error!,
-                                    style: const TextStyle(color: AppColors.danger, fontSize: 13),
-                                  ),
+                            validator: (v) {
+                              final t = v?.trim() ?? "";
+                              return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(t)
+                                  ? null
+                                  : "Ingresa un email válido";
+                            },
+                          ),
+                          const SizedBox(height: 14),
+                          TextFormField(
+                            controller: _passwordCtrl,
+                            obscureText: _ocultarPassword,
+                            textInputAction: TextInputAction.done,
+                            autofillHints: const [AutofillHints.password],
+                            autovalidateMode: AutovalidateMode.onUserInteraction,
+                            onFieldSubmitted: (_) => _manejarLogin(),
+                            decoration: InputDecoration(
+                              labelText: "Contraseña",
+                              prefixIcon: const Icon(Icons.lock_outline, size: 20),
+                              suffixIcon: IconButton(
+                                tooltip: _ocultarPassword ? "Mostrar contraseña" : "Ocultar contraseña",
+                                icon: Icon(
+                                  _ocultarPassword
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
+                                  size: 20,
                                 ),
-                              ],
+                                onPressed: () => setState(() => _ocultarPassword = !_ocultarPassword),
+                              ),
                             ),
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-
-                  TextFormField(
-                    controller: _emailCtrl,
-                    keyboardType: TextInputType.emailAddress,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: "Email",
-                      prefixIcon: Icon(Icons.mail_outline, color: AppColors.gray, size: 20),
-                    ),
-                    validator: (v) => (v == null || !v.contains("@")) ? "Ingresa un email válido" : null,
-                  ),
-                  const SizedBox(height: 14),
-                  TextFormField(
-                    controller: _passwordCtrl,
-                    obscureText: _ocultarPassword,
-                    textInputAction: TextInputAction.done,
-                    onFieldSubmitted: (_) => _manejarLogin(),
-                    decoration: InputDecoration(
-                      labelText: "Contraseña",
-                      prefixIcon: const Icon(Icons.lock_outline, color: AppColors.gray, size: 20),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _ocultarPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                          color: AppColors.gray,
-                          size: 20,
-                        ),
-                        onPressed: () => setState(() => _ocultarPassword = !_ocultarPassword),
+                            validator: (v) => (v == null || v.isEmpty) ? "Ingresa tu contraseña" : null,
+                          ),
+                          const SizedBox(height: 28),
+                          BotonPrincipal(
+                            texto: "Ingresar",
+                            cargando: _cargando,
+                            onPressed: _cargando ? null : _manejarLogin,
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                "¿No tienes cuenta?",
+                                style: AppFonts.cuerpo(size: 13, color: AppColors.gray),
+                              ),
+                              TextButton(
+                                onPressed: _cargando
+                                    ? null
+                                    : () => Navigator.of(context)
+                                        .push(deslizarDesdeDerecha(const RegistroScreen())),
+                                child: const Text("Regístrate"),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
-                    validator: (v) => (v == null || v.isEmpty) ? "Ingresa tu contraseña" : null,
                   ),
-                  const SizedBox(height: 28),
-
-                  ElevatedButton(
-                    onPressed: _cargando ? null : _manejarLogin,
-                    child: _cargando
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.2),
-                          )
-                        : const Text("Ingresar"),
-                  ),
-                  const SizedBox(height: 18),
-
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text("¿No tienes cuenta?", style: TextStyle(color: AppColors.gray, fontSize: 13)),
-                      TextButton(
-                        onPressed: () {
-                          Navigator.of(context).push(deslizarDesdeDerecha(const RegistroScreen()));
-                        },
-                        child: const Text(
-                          "Regístrate",
-                          style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 13),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CabeceraMarca extends StatelessWidget {
+  const _CabeceraMarca();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: AppGradients.cacao,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(36)),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 36, 24, 36),
+          child: Aparecer(
+            child: Column(
+              children: [
+                Container(
+                  width: 92,
+                  height: 92,
+                  decoration: BoxDecoration(
+                    color: AppColors.kraft,
+                    shape: BoxShape.circle,
+                    boxShadow: AppShadows.media,
+                  ),
+                  alignment: Alignment.center,
+                  child: const ExcludeSemantics(child: Text("🍕", style: TextStyle(fontSize: 46))),
+                ),
+                const SizedBox(height: 18),
+                Text("Mamma Pizza", style: AppFonts.marca(size: 36, color: Colors.white)),
+                const SizedBox(height: 4),
+                Text(
+                  "El sabor de la felicidad",
+                  style: AppFonts.cuerpo(size: 14, color: AppColors.kraftLight)
+                      .copyWith(fontStyle: FontStyle.italic),
+                ),
+              ],
             ),
           ),
         ),

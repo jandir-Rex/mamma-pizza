@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../core/theme.dart';
 import '../models/direccion.dart';
 import '../services/direcciones_service.dart';
-import '../widgets/pizza_loading.dart';
+import '../widgets/presionable.dart';
+import '../widgets/ui_comunes.dart';
 import 'seleccionar_ubicacion_screen.dart';
 
 class DireccionesScreen extends StatefulWidget {
@@ -15,6 +17,7 @@ class DireccionesScreen extends StatefulWidget {
 class _DireccionesScreenState extends State<DireccionesScreen> {
   List<Direccion> _direcciones = [];
   bool _cargando = true;
+  bool _error = false;
 
   @override
   void initState() {
@@ -22,14 +25,23 @@ class _DireccionesScreenState extends State<DireccionesScreen> {
     _cargar();
   }
 
-  Future<void> _cargar() async {
+  Future<void> _cargar({bool silencioso = false}) async {
     if (!mounted) return;
-    setState(() => _cargando = true);
+    if (!silencioso) {
+      setState(() {
+        _cargando = true;
+        _error = false;
+      });
+    }
     try {
       final direcciones = await DireccionesService.listar();
       if (!mounted) return;
-      setState(() => _direcciones = direcciones);
+      setState(() {
+        _direcciones = direcciones;
+        _error = false;
+      });
     } catch (_) {
+      if (mounted) setState(() => _error = _direcciones.isEmpty);
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
@@ -39,7 +51,7 @@ class _DireccionesScreenState extends State<DireccionesScreen> {
     final nueva = await Navigator.of(context).push<Direccion>(
       MaterialPageRoute<Direccion>(builder: (_) => const SeleccionarUbicacionScreen()),
     );
-    if (nueva != null) _cargar();
+    if (nueva != null) _cargar(silencioso: true);
   }
 
   Future<void> _eliminar(Direccion d) async {
@@ -52,68 +64,166 @@ class _DireccionesScreenState extends State<DireccionesScreen> {
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancelar")),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text("Eliminar", style: TextStyle(color: AppColors.danger)),
+            style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+            child: const Text("Eliminar"),
           ),
         ],
       ),
     );
 
-    if (confirmar == true) {
-      try {
-        await DireccionesService.eliminar(d.id);
-        _cargar();
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst("Exception: ", ""))));
-      }
+    if (confirmar != true) return;
+    try {
+      await DireccionesService.eliminar(d.id);
+      HapticFeedback.mediumImpact();
+      if (!mounted) return;
+      setState(() => _direcciones = _direcciones.where((x) => x.id != d.id).toList());
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text("Dirección eliminada")));
+      _cargar(silencioso: true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst("Exception: ", ""))),
+      );
     }
+  }
+
+  Widget _cuerpo() {
+    if (_cargando) {
+      return ListView(
+        key: const ValueKey("carga"),
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        children: const [
+          EsqueletoTarjeta(alto: 84),
+          EsqueletoTarjeta(alto: 84),
+          EsqueletoTarjeta(alto: 84),
+        ],
+      );
+    }
+    if (_error) {
+      return EstadoError(
+        key: const ValueKey("error"),
+        mensaje: "No pudimos cargar tus direcciones.",
+        onReintentar: _cargar,
+      );
+    }
+    if (_direcciones.isEmpty) {
+      return EstadoVacio(
+        key: const ValueKey("vacio"),
+        emoji: "📍",
+        titulo: "Aún no tienes direcciones",
+        mensaje: "Guarda dónde quieres recibir tu pizza y pedirás en segundos.",
+        textoAccion: "Agregar dirección",
+        onAccion: _agregar,
+      );
+    }
+    return RefreshIndicator(
+      key: const ValueKey("lista"),
+      color: AppColors.primary,
+      onRefresh: () => _cargar(silencioso: true),
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 104),
+        itemCount: _direcciones.length,
+        itemBuilder: (context, index) {
+          final d = _direcciones[index];
+          return Aparecer(
+            indice: index,
+            child: _TarjetaDireccion(direccion: d, onEliminar: () => _eliminar(d)),
+          );
+        },
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Mis direcciones")),
-      body: _cargando
-          ? const Center(child: PizzaLoading(mensaje: "Cargando..."))
-          : _direcciones.isEmpty
-              ? const Center(child: Text("No tienes direcciones guardadas", style: TextStyle(color: AppColors.gray)))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _direcciones.length,
-                  itemBuilder: (context, index) {
-                    final d = _direcciones[index];
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.location_on, color: AppColors.primary),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(d.zona, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                                if (d.referencia != null && d.referencia!.isNotEmpty)
-                                  Text(d.referencia!, style: const TextStyle(color: AppColors.gray, fontSize: 12)),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: () => _eliminar(d),
-                            icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
+      body: AnimatedSwitcher(duration: AppMotion.normal, child: _cuerpo()),
+      floatingActionButton: (!_cargando && !_error && _direcciones.isNotEmpty)
+          ? Presionable(
+              onTap: _agregar,
+              haptico: Haptico.ligero,
+              etiquetaSemantica: "Agregar dirección",
+              child: Container(
+                height: 56,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: AppShadows.brillo(AppColors.primary),
                 ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _agregar,
-        backgroundColor: AppColors.primary,
-        icon: const Icon(Icons.add_location_alt_outlined),
-        label: const Text("Agregar"),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.add_location_alt_outlined, color: Colors.white),
+                    const SizedBox(width: 8),
+                    Text(
+                      "Agregar dirección",
+                      style: AppFonts.cuerpo(size: 14, peso: FontWeight.w600, color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : null,
+    );
+  }
+}
+
+class _TarjetaDireccion extends StatelessWidget {
+  final Direccion direccion;
+  final VoidCallback onEliminar;
+  const _TarjetaDireccion({required this.direccion, required this.onEliminar});
+
+  @override
+  Widget build(BuildContext context) {
+    final d = direccion;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(14, 10, 4, 10),
+      constraints: const BoxConstraints(minHeight: 72),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: AppRadius.bMedio,
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppShadows.suave,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: const BoxDecoration(color: AppColors.kraftLight, shape: BoxShape.circle),
+            child: const Icon(Icons.location_on, color: AppColors.primary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(d.zona, style: AppFonts.cuerpo(size: 14, peso: FontWeight.w600)),
+                if (d.referencia != null && d.referencia!.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    d.referencia!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppFonts.cuerpo(size: 12, color: AppColors.gray),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: "Eliminar dirección",
+            onPressed: onEliminar,
+            icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger, size: 22),
+          ),
+        ],
       ),
     );
   }

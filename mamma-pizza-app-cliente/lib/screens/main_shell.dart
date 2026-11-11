@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
 import '../core/theme.dart';
 import '../widgets/barra_carrito.dart';
+import '../widgets/presionable.dart';
 import 'home_screen.dart';
 import 'menu_screen.dart';
 import 'pedidos_historial_screen.dart';
 import 'perfil_screen.dart';
+
+class _ItemNav {
+  final IconData icono;
+  final IconData iconoActivo;
+  final String texto;
+  const _ItemNav(this.icono, this.iconoActivo, this.texto);
+}
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -29,35 +37,16 @@ class _MainShellState extends State<MainShell> {
 
   late final List<Widget> _pantallas = [
     HomeScreen(onVerMenu: _irAMenu),
-    MenuScreen(
-      categoria: _categoria,
-      onVolver: _irAInicio,
-    ),
+    MenuScreen(categoria: _categoria, onVolver: _irAInicio),
     const PedidosHistorialScreen(),
     const PerfilScreen(),
   ];
 
-  final _items = const [
-    (
-      icono: Icons.home_outlined,
-      iconoActivo: Icons.home,
-      texto: "Inicio",
-    ),
-    (
-      icono: Icons.local_pizza_outlined,
-      iconoActivo: Icons.local_pizza,
-      texto: "Menú",
-    ),
-    (
-      icono: Icons.receipt_long_outlined,
-      iconoActivo: Icons.receipt_long,
-      texto: "Pedidos",
-    ),
-    (
-      icono: Icons.person_outline,
-      iconoActivo: Icons.person,
-      texto: "Perfil",
-    ),
+  static const _items = [
+    _ItemNav(Icons.home_outlined, Icons.home_rounded, "Inicio"),
+    _ItemNav(Icons.local_pizza_outlined, Icons.local_pizza, "Menú"),
+    _ItemNav(Icons.receipt_long_outlined, Icons.receipt_long, "Pedidos"),
+    _ItemNav(Icons.person_outline, Icons.person, "Perfil"),
   ];
 
   @override
@@ -68,77 +57,75 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        children: [
-          IndexedStack(
-            index: _indice,
-            children: _pantallas,
-          ),
+    // Atrás en otra pestaña regresa a Inicio en vez de cerrar la app.
+    return PopScope(
+      canPop: _indice == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _irAInicio();
+      },
+      child: Scaffold(
+        body: Stack(
+          children: [
+            IndexedStack(index: _indice, children: _pantallas),
 
-          // Único carrito de la aplicación.
-          // Aparece desde abajo cuando hay productos.
-          const Positioned(
-            right: 16,
-            bottom: 84,
-            child: BarraCarritoFlotante(),
-          ),
-        ],
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFFBF5),
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(20),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 14,
-              offset: const Offset(0, -3),
+            // Único carrito de la aplicación: aparece cuando hay productos.
+            const Positioned(
+              right: 16,
+              bottom: 16,
+              child: BarraCarritoFlotante(),
             ),
           ],
         ),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.only(
-              top: 8,
-              bottom: 5,
-            ),
-            child: Row(
-              children: List.generate(
-                _items.length,
-                (i) {
+        bottomNavigationBar: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            boxShadow: AppShadows.barraInferior,
+          ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
+              child: Row(
+                children: List.generate(_items.length, (i) {
                   final activo = i == _indice;
                   final item = _items[i];
                   final color = activo ? AppColors.primary : AppColors.gray;
 
                   return Expanded(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => setState(
-                        () => _indice = i,
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 2,
-                        ),
+                    child: Presionable(
+                      onTap: () => setState(() => _indice = i),
+                      etiquetaSemantica: item.texto,
+                      child: SizedBox(
+                        height: 56,
                         child: Column(
-                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(
-                              activo ? item.iconoActivo : item.icono,
-                              color: color,
-                              size: 23,
+                            AnimatedContainer(
+                              duration: AppMotion.normal,
+                              curve: AppMotion.curva,
+                              width: activo ? 60 : 36,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: activo ? AppColors.kraft : Colors.transparent,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: AnimatedSwitcher(
+                                duration: AppMotion.rapida,
+                                child: Icon(
+                                  activo ? item.iconoActivo : item.icono,
+                                  key: ValueKey(activo),
+                                  color: color,
+                                  size: 24,
+                                ),
+                              ),
                             ),
-                            const SizedBox(height: 3),
+                            const SizedBox(height: 2),
                             Text(
                               item.texto,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight:
-                                    activo ? FontWeight.w700 : FontWeight.w400,
+                              style: AppFonts.cuerpo(
+                                size: 12,
+                                peso: activo ? FontWeight.w700 : FontWeight.w500,
                                 color: color,
                               ),
                             ),
@@ -147,7 +134,7 @@ class _MainShellState extends State<MainShell> {
                       ),
                     ),
                   );
-                },
+                }),
               ),
             ),
           ),
