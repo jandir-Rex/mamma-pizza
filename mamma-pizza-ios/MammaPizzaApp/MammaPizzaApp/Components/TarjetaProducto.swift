@@ -7,48 +7,50 @@ struct TarjetaProducto: View {
 
     var body: some View {
         Button { onTap?() } label: {
-            HStack(spacing: 12) {
-                ProductoImagen(url: producto.imagenUrl, size: 84, radius: 14,
+            HStack(spacing: 14) {
+                ProductoImagen(url: producto.imagenUrl, size: 92, radius: 16,
                                icono: iconoCategoria(producto.categoriaNombre))
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(producto.nombre)
-                        .font(.subheadline.weight(.semibold))
+                        .font(.headline)
                         .foregroundStyle(AppColors.texto)
                         .lineLimit(1)
                     Text(descripcion)
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundStyle(AppColors.gris)
                         .lineLimit(2)
-                    Spacer(minLength: 4)
 
-                    if agotado {
-                        Text("Agotado")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(AppColors.danger)
-                    } else {
-                        HStack {
-                            Text("Desde \(producto.precioDesde.soles)")
-                                .font(.subheadline.weight(.bold))
-                                .foregroundStyle(AppColors.texto)
-                            Spacer()
+                    Spacer(minLength: 6)
+
+                    HStack(alignment: .bottom) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("Desde").font(.caption2).foregroundStyle(AppColors.gris)
+                            Text(producto.precioDesde.soles)
+                                .font(.precio(.headline))
+                                .foregroundStyle(AppColors.primary)
+                        }
+                        Spacer()
+                        if agotado {
+                            Text("Agotado")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(AppColors.danger)
+                        } else {
                             Image(systemName: "plus")
-                                .font(.footnote.weight(.bold))
+                                .font(.subheadline.weight(.bold))
                                 .foregroundStyle(.white)
-                                .frame(width: 30, height: 30)
+                                .frame(width: 36, height: 36)
                                 .background(AppColors.primary, in: Circle())
                                 .accessibilityHidden(true)
                         }
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
             }
-            .padding(10)
-            .background(AppColors.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .shadow(color: .black.opacity(0.05), radius: 8, y: 3)
-            .opacity(agotado ? 0.55 : 1)
+            .tarjeta(padding: 10, radio: 20)
+            .opacity(agotado ? 0.6 : 1)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.presion)
         .accessibilityElement(children: .combine)
         .accessibilityHint(agotado ? "Producto agotado" : "Ver opciones del producto")
     }

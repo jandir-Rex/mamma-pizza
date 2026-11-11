@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Píldora flotante: cantidad, acción y total.
 struct BarraCarritoFlotante: View {
     @Environment(CarritoStore.self) private var carrito
     var onTap: () -> Void
@@ -9,35 +10,33 @@ struct BarraCarritoFlotante: View {
         Group {
             if visible {
                 Button(action: onTap) {
-                    Image(systemName: "bag")
-                        .font(.title2)
-                        .foregroundStyle(AppColors.texto)
-                        .frame(width: 54, height: 54)
-                        .background(AppColors.surface, in: RoundedRectangle(cornerRadius: 17, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 17, style: .continuous)
-                            .stroke(AppColors.hairline))
-                        .shadow(color: .black.opacity(0.12), radius: 12, y: 5)
-                        .overlay(alignment: .topTrailing) {
-                            Text(carrito.cantidadItems > 99 ? "99+" : "\(carrito.cantidadItems)")
-                                .font(.caption2.weight(.heavy))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 5)
-                                .frame(minWidth: 21, minHeight: 21)
-                                .background(AppColors.primary, in: Capsule())
-                                .offset(x: 5, y: -5)
-                        }
+                    HStack(spacing: 12) {
+                        Text(carrito.cantidadItems > 99 ? "99+" : "\(carrito.cantidadItems)")
+                            .font(.footnote.weight(.bold).monospacedDigit())
+                            .frame(minWidth: 28, minHeight: 28)
+                            .background(.white.opacity(0.22), in: Circle())
+                        Text("Ver carrito").font(.headline)
+                        Spacer()
+                        Text(carrito.total.soles).font(.precio(.headline))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 18)
+                    .frame(height: 56)
+                    .background(AppColors.primary, in: Capsule())
+                    .shadow(color: AppColors.primary.opacity(0.35), radius: 14, y: 6)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.presion)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                .accessibilityLabel("Carrito")
-                .accessibilityValue("\(carrito.cantidadItems) productos")
+                .sensoryFeedback(.impact(weight: .light), trigger: carrito.cantidadItems)
+                .accessibilityLabel("Ver carrito")
+                .accessibilityValue("\(carrito.cantidadItems) productos, \(carrito.total.soles)")
             }
         }
         .animation(.smooth(duration: 0.3), value: visible)
     }
 }
 
-/// Botón de carrito simple del header (era `BotonCarrito` en tony_widgets.dart).
+/// Botón de carrito simple del header (sin cambios).
 struct BotonCarrito: View {
     @Environment(CarritoStore.self) private var carrito
     var onTap: () -> Void

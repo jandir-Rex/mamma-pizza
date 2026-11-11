@@ -12,43 +12,57 @@ struct DireccionesView: View {
             if cargando && direcciones.isEmpty {
                 PizzaLoadingView(mensaje: "Cargando...").frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if direcciones.isEmpty {
-                ContentUnavailableView("No tienes direcciones guardadas", systemImage: "mappin.slash",
-                                       description: Text("Agrega una para pedir delivery más rápido"))
+                ContentUnavailableView {
+                    Label("No tienes direcciones guardadas", systemImage: "mappin.slash")
+                } description: {
+                    Text("Agrega una para pedir delivery más rápido")
+                } actions: {
+                    Button("Agregar dirección") { mostrandoMapa = true }
+                        .buttonStyle(.borderedProminent)
+                }
             } else {
                 List {
                     ForEach(direcciones) { d in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Label(d.zona, systemImage: "mappin.circle.fill")
-                                .foregroundStyle(AppColors.texto)
-                            if let r = d.referencia, !r.isEmpty {
-                                Text(r).font(.footnote).foregroundStyle(AppColors.gris).padding(.leading, 32)
+                        FilaDireccion(direccion: d)
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                            .swipeActions {
+                                Button("Eliminar", role: .destructive) { porEliminar = d }
                             }
-                        }
-                        .swipeActions {
-                            Button("Eliminar", role: .destructive) { porEliminar = d }
-                        }
+                            .contextMenu {
+                                Button("Eliminar", systemImage: "trash", role: .destructive) { porEliminar = d }
+                            }
                     }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .safeAreaInset(edge: .bottom) {
+                    Button { mostrandoMapa = true } label: {
+                        Label("Agregar dirección", systemImage: "plus")
+                    }
+                    .buttonStyle(.primario)
+                    .padding(.horizontal, 20).padding(.vertical, 12)
+                    .background(.bar)
                 }
             }
         }
-        .background(AppColors.bg)
+        .fondoApp()
         .navigationTitle("Mis direcciones")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { mostrandoMapa = true } label: { Label("Agregar", systemImage: "plus") }
-            }
-        }
         .refreshable { await cargar() }
         .task { await cargar() }
         .sheet(isPresented: $mostrandoMapa) {
             SeleccionarUbicacionView { _ in Task { await cargar() } }
         }
-        .confirmationDialog("¿Eliminar dirección?", isPresented: .constant(porEliminar != nil),
+        .confirmationDialog("¿Eliminar dirección?",
+                            isPresented: Binding(get: { porEliminar != nil },
+                                                 set: { if !$0 { porEliminar = nil } }),
                             titleVisibility: .visible, presenting: porEliminar) { d in
             Button("Eliminar", role: .destructive) { Task { await eliminar(d) } }
             Button("Cancelar", role: .cancel) { porEliminar = nil }
         } message: { Text($0.zona) }
-        .alert("No se pudo eliminar", isPresented: .constant(error != nil)) {
+        .alert("No se pudo eliminar",
+               isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("OK") { error = nil }
         } message: { Text(error ?? "") }
     }
@@ -67,5 +81,29 @@ struct DireccionesView: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+}
+
+private struct FilaDireccion: View {
+    let direccion: Direccion
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "location.fill")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(AppColors.cacaoTexto)
+                .frame(width: 40, height: 40)
+                .background(AppColors.kraftClaro, in: Circle())
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(direccion.zona).font(.body.weight(.semibold)).foregroundStyle(AppColors.texto)
+                if let r = direccion.referencia, !r.isEmpty {
+                    Text(r).font(.footnote).foregroundStyle(AppColors.gris).lineLimit(2)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .tarjeta(padding: 14)
+        .accessibilityElement(children: .combine)
     }
 }

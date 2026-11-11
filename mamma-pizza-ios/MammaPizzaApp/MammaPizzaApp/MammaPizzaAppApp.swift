@@ -20,23 +20,32 @@ struct MammaPizzaApp: App {
     }
 }
 
-/// Equivale a `_Arrancador` de main.dart. Al cambiar `auth.usuario`
-/// (login, registro o logout) la raíz cambia sola: no hace falta navegar a mano.
+/// Raíz de la app. Al cambiar `auth.usuario` (login, registro o logout)
+/// la pantalla cambia sola. El splash se muestra encima al arrancar.
 struct RootView: View {
     @Environment(AuthStore.self) private var auth
+    @State private var mostrandoSplash = true
 
     var body: some View {
-        Group {
-            if auth.cargando {
-                PizzaLoadingView(mensaje: "Cargando…")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(AppColors.bg)
-            } else if auth.usuario != nil {
-                MainShellView().transition(.opacity)
-            } else {
-                LoginView().transition(.opacity)
+        ZStack {
+            Group {
+                if auth.cargando {
+                    AppColors.bg.ignoresSafeArea()
+                } else if auth.usuario != nil {
+                    MainShellView().transition(.opacity)
+                } else {
+                    LoginView().transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.28), value: auth.usuario)
+
+            if mostrandoSplash || auth.cargando {
+                SplashView {
+                    withAnimation(.easeInOut(duration: 0.5)) { mostrandoSplash = false }
+                }
+                .transition(.opacity)
+                .zIndex(1)
             }
         }
-        .animation(.easeInOut(duration: 0.28), value: auth.usuario)
     }
 }

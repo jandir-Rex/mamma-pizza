@@ -25,24 +25,34 @@ struct PedidosHistorialView: View {
                     ContentUnavailableView("Todavía no tienes pedidos", systemImage: "receipt",
                                            description: Text("Realiza tu primer pedido para verlo aquí"))
                 } else {
-                    List {
-                        if !activos.isEmpty {
-                            Section("En curso") { ForEach(activos) { FilaPedido(pedido: $0) } }
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 28) {
+                            if !activos.isEmpty { seccion("En curso", activos) }
+                            if !anteriores.isEmpty { seccion("Anteriores", anteriores) }
                         }
-                        if !anteriores.isEmpty {
-                            Section("Anteriores") { ForEach(anteriores) { FilaPedido(pedido: $0) } }
-                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
                     }
                     .contentMargins(.bottom, 70, for: .scrollContent)
                 }
             }
-            .background(AppColors.bg)
+            .fondoApp()
             .navigationTitle("Mis pedidos")
             .navigationDestination(for: Int.self) { SeguimientoView(pedidoId: $0) }
             .refreshable { await cargar() }
             .conCarritoFlotante()
         }
         .task { await cargar() }   // se ejecuta cada vez que la pestaña aparece
+    }
+
+    private func seccion(_ titulo: String, _ lista: [Pedido]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            EncabezadoSeccion(titulo)
+            ForEach(lista) { p in
+                NavigationLink(value: p.id) { FilaPedido(pedido: p) }
+                    .buttonStyle(.presion)
+            }
+        }
     }
 
     private func cargar() async {
@@ -62,32 +72,38 @@ private struct FilaPedido: View {
     let pedido: Pedido
 
     var body: some View {
-        NavigationLink(value: pedido.id) {
-            VStack(alignment: .leading, spacing: 8) {
+        let color = EstadoPedidoUI.color(pedido.estado)
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: EstadoPedidoUI.icono(pedido.estado))
+                .font(.headline)
+                .foregroundStyle(EstadoPedidoUI.colorTexto(pedido.estado))
+                .frame(width: 44, height: 44)
+                .background(color.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("Pedido #\(pedido.codigo)").font(.headline)
+                    Text("Pedido #\(pedido.codigo)").font(.headline).foregroundStyle(AppColors.texto)
                     Spacer()
-                    Text(EstadoPedidoUI.etiqueta(pedido.estado))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(EstadoPedidoUI.color(pedido.estado))
-                        .padding(.horizontal, 10).padding(.vertical, 4)
-                        .background(EstadoPedidoUI.color(pedido.estado).opacity(0.12), in: Capsule())
+                    Text(pedido.total.soles).font(.precio(.headline)).foregroundStyle(AppColors.primary)
                 }
-                Label("\(pedido.esDelivery ? "Delivery" : "Recojo") · \(pedido.cantidadItems) items",
-                      systemImage: pedido.esDelivery ? "scooter" : "storefront")
+                InsigniaEstado(estado: pedido.estado)
+                Text("\(pedido.esDelivery ? "Delivery" : "Recojo") · \(pedido.cantidadItems) items · \(pedido.createdAt.formatted(date: .abbreviated, time: .shortened))")
                     .font(.footnote).foregroundStyle(AppColors.gris)
-                if pedido.activo {
-                    Text(EstadoPedidoUI.subtitulo(pedido.estado))
-                        .font(.footnote.weight(.medium)).foregroundStyle(AppColors.primary)
-                }
-                HStack {
-                    Text(pedido.createdAt.formatted(date: .abbreviated, time: .shortened))
-                        .font(.footnote).foregroundStyle(AppColors.gris)
-                    Spacer()
-                    Text(pedido.total.soles).font(.headline).foregroundStyle(AppColors.primary)
-                }
             }
-            .padding(.vertical, 4)
+
+            Image(systemName: "chevron.right")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(AppColors.grisClaro)
+                .padding(.top, 14)
         }
+        .tarjeta(padding: 14)
+        .overlay {
+            if pedido.activo {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(color.opacity(0.45), lineWidth: 1.5)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 }

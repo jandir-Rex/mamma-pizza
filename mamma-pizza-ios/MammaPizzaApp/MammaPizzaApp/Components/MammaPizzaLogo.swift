@@ -2,18 +2,22 @@ import SwiftUI
 
 struct MammaPizzaLogo: View {
     var body: some View {
-        HStack(spacing: 8) {
-            // Reemplaza por tu logo: Image("LogoMamma") en Assets.xcassets
-            Image(systemName: "fork.knife.circle")
-                .font(.system(size: 46, weight: .light))
-                .foregroundStyle(AppColors.primary)
-            VStack(alignment: .leading, spacing: 2) {
+        VStack(spacing: 12) {
+            // Reemplaza por tu logo real: Image("LogoMamma") en Assets.xcassets
+            Image(systemName: "flame.fill")
+                .font(.system(size: 34, weight: .semibold))
+                .foregroundStyle(AppColors.kraft)
+                .frame(width: 76, height: 76)
+                .background(AppColors.marcaDegradado, in: Circle())
+                .shadow(color: AppColors.cacao.opacity(0.3), radius: 12, y: 6)
+
+            VStack(spacing: 2) {
                 Text("MammaPizza")
-                    .font(.system(.largeTitle, design: .rounded, weight: .heavy))
-                    .foregroundStyle(AppColors.texto)
+                    .font(.system(.largeTitle, design: .serif, weight: .heavy))
+                    .foregroundStyle(AppColors.cacaoTexto)
                 Text("PIZZA HOUSE")
                     .font(.caption2.weight(.bold))
-                    .tracking(2)
+                    .tracking(3)
                     .foregroundStyle(AppColors.primary)
             }
         }

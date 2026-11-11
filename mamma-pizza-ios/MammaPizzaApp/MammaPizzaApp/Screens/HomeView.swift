@@ -37,8 +37,13 @@ struct HomeView: View {
                     contenido
                 }
             }
-            .background(AppColors.bg)
-            .navigationTitle("MammaPizza")
+            .fondoApp()
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("MammaPizza").font(.marca(.headline)).foregroundStyle(AppColors.primary)
+                }
+            }
             .conCarritoFlotante()
         }
         .task { if !menu.cargado { await menu.cargar() } }
@@ -49,52 +54,51 @@ struct HomeView: View {
 
     private var contenido: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 28) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(saludo),").font(.subheadline).foregroundStyle(AppColors.gris)
+                    Text(saludo).font(.subheadline).foregroundStyle(AppColors.gris)
                     Text(nombre.isEmpty ? "👋" : "\(nombre) 👋")
-                        .font(.largeTitle.weight(.heavy))
-                    Text("¿Qué antojo tienes hoy?").font(.subheadline).foregroundStyle(AppColors.gris)
+                        .font(.system(.largeTitle, design: .rounded, weight: .heavy))
                 }
 
                 Button { nav.irAMenu() } label: {
                     Label("Buscar pizzas, bebidas, etc...", systemImage: "magnifyingglass")
                         .foregroundStyle(AppColors.gris)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 14).frame(height: 46)
+                        .padding(.horizontal, 14).frame(height: 48)
                         .background(AppColors.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(AppColors.hairline, lineWidth: 1))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.presion)
 
                 banner
 
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("Categorías").font(.title3.weight(.bold))
-                        Spacer()
-                        Button("Ver todas") { nav.irAMenu() }.font(.subheadline.weight(.semibold))
-                    }
-                    HStack {
+                VStack(alignment: .leading, spacing: 14) {
+                    EncabezadoSeccion("Categorías", boton: "Ver todas") { nav.irAMenu() }
+                    HStack(spacing: 12) {
                         ForEach(categorias, id: \.nombre) { c in
                             Button { nav.irAMenu(c.nombre) } label: {
                                 VStack(spacing: 8) {
                                     Image(systemName: c.simbolo)
                                         .font(.title2)
                                         .foregroundStyle(AppColors.primary)
-                                        .frame(width: 64, height: 64)
-                                        .background(AppColors.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                                    Text(c.nombre).font(.caption.weight(.medium))
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 64)
+                                        .background(AppColors.kraftClaro,
+                                                    in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                    Text(c.nombre)
+                                        .font(.caption.weight(.medium))
                                         .foregroundStyle(AppColors.texto)
                                 }
-                                .frame(maxWidth: .infinity)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.presion)
                         }
                     }
                 }
 
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Recomendados para ti").font(.title3.weight(.bold))
+                VStack(alignment: .leading, spacing: 14) {
+                    EncabezadoSeccion("Recomendados para ti")
                     if recomendados.isEmpty {
                         Text("Pronto tendremos recomendaciones para ti")
                             .foregroundStyle(AppColors.gris)
@@ -114,28 +118,42 @@ struct HomeView: View {
     }
 
     private var banner: some View {
-        ZStack(alignment: .leading) {
-            LinearGradient(colors: [Color(hex: 0xB71C1C), Color(hex: 0x7F1214)],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-            VStack(alignment: .leading, spacing: 8) {
-                Text("La verdadera").font(.subheadline)
-                Text("pizza, siempre").font(.title2.weight(.heavy))
-                Text("es una buena idea").font(.subheadline)
-                Rectangle().fill(AppColors.gold).frame(width: 64, height: 2)
-                Button { nav.irAMenu() } label: {
-                    Label("Ver menú", systemImage: "arrow.right")
-                        .labelStyle(.titleAndIcon)
-                        .font(.footnote.weight(.bold))
-                        .foregroundStyle(Color(hex: 0xC41E24))
-                        .padding(.horizontal, 16).padding(.vertical, 8)
-                        .background(.white, in: Capsule())
-                }
+        VStack(alignment: .leading, spacing: 6) {
+            Text("HECHA AL HORNO")
+                .font(.caption.weight(.bold)).tracking(1.5)
+                .foregroundStyle(AppColors.mostaza)
+            Text("La verdadera pizza\nes una buena idea")
+                .font(.marca(.title2))
+                .foregroundStyle(.white)
+                .fixedSize(horizontal: false, vertical: true)
+            Button { nav.irAMenu() } label: {
+                Label("Ver menú", systemImage: "arrow.right")
+                    .font(.footnote.weight(.bold))
+                    .foregroundStyle(AppColors.cacao)
+                    .padding(.horizontal, 16).frame(minHeight: 36)
+                    .background(AppColors.kraft, in: Capsule())
             }
-            .foregroundStyle(.white)
-            .padding(18)
+            .buttonStyle(.presion)
+            .padding(.top, 10)
         }
-        .frame(height: 172)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            ZStack(alignment: .topTrailing) {
+                AppColors.marcaDegradado
+                Circle().fill(AppColors.kraft.opacity(0.10)).frame(width: 220).offset(x: 70, y: -80)
+                Circle().fill(AppColors.tomate.opacity(0.22)).frame(width: 110).offset(x: 30, y: 90)
+            }
+        }
+        .overlay(alignment: .trailing) {
+            Image(systemName: "flame.fill")
+                .font(.system(size: 64))
+                .foregroundStyle(AppColors.mostaza)
+                .rotationEffect(.degrees(-10))
+                .padding(.trailing, 24)
+                .accessibilityHidden(true)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .accessibilityElement(children: .contain)
     }
 }

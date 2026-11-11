@@ -19,7 +19,7 @@ struct CarritoSheet: View {
                     lista
                 }
             }
-            .background(AppColors.bg)
+            .fondoApp()
             .navigationTitle("Mi carrito")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -49,43 +49,44 @@ struct CarritoSheet: View {
 
     private var lista: some View {
         List {
-            Section {
-                ForEach(carrito.items) { item in
-                    FilaCarrito(item: item)
-                        .swipeActions(edge: .trailing) {
-                            Button("Quitar", role: .destructive) {
-                                withAnimation { carrito.quitar(id: item.id) }
-                            }
+            ForEach(carrito.items) { item in
+                FilaCarrito(item: item)
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                    .swipeActions(edge: .trailing) {
+                        Button("Quitar", role: .destructive) {
+                            withAnimation { carrito.quitar(id: item.id) }
                         }
-                }
-            }
-            Section("Resumen") {
-                LabeledContent("Subtotal", value: carrito.total.soles)
-                LabeledContent("Delivery", value: "Al pagar")
+                    }
             }
         }
-        .listStyle(.insetGrouped)
+        .listStyle(.plain)
         .scrollContentBackground(.hidden)
     }
 
     private var barraTotal: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Text("Total").font(.headline)
+        VStack(spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Subtotal").font(.subheadline).foregroundStyle(AppColors.gris)
+                    Text("Delivery: al pagar").font(.caption).foregroundStyle(AppColors.gris)
+                }
                 Spacer()
                 Text(carrito.total.soles)
-                    .font(.title3.weight(.bold))
+                    .font(.precio(.title))
                     .foregroundStyle(AppColors.primary)
+                    .contentTransition(.numericText(value: carrito.total))
+                    .animation(.snappy, value: carrito.total)
             }
             Button {
                 dismiss()
                 onContinuar()
             } label: {
-                Text("Continuar al pago").frame(maxWidth: .infinity)
+                Label("Continuar al pago", systemImage: "arrow.right")
+                    .labelStyle(.titleAndIcon)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .tint(AppColors.primary)
+            .buttonStyle(.primario)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
@@ -105,12 +106,13 @@ private struct FilaCarrito: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            ProductoImagen(url: item.producto.imagenUrl, size: 64, radius: 12,
+            ProductoImagen(url: item.producto.imagenUrl, size: 72, radius: 14,
                            icono: iconoCategoria(item.producto.categoriaNombre))
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.producto.nombre)
                     .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AppColors.texto)
                     .lineLimit(1)
                 Text(detalle)
                     .font(.caption)
@@ -122,42 +124,20 @@ private struct FilaCarrito: View {
                         .foregroundStyle(AppColors.gris)
                         .lineLimit(1)
                 }
+                Spacer(minLength: 4)
                 HStack {
                     Text(item.subtotal.soles)
-                        .font(.subheadline.weight(.bold))
+                        .font(.precio(.subheadline))
                         .foregroundStyle(AppColors.primary)
                     Spacer()
-                    controles
+                    SelectorCantidad(cantidad: item.cantidad,
+                                     maximo: CarritoStore.maxPorItem,
+                                     minimoEliminar: true,
+                                     onMenos: { withAnimation { carrito.cambiarCantidad(id: item.id, delta: -1) } },
+                                     onMas: { carrito.cambiarCantidad(id: item.id, delta: 1) })
                 }
             }
         }
-        .padding(.vertical, 2)
-    }
-
-    /// Botones de 44 pt (mínimo HIG). Con cantidad 1 el "−" se convierte en papelera.
-    private var controles: some View {
-        HStack(spacing: 0) {
-            Button {
-                carrito.cambiarCantidad(id: item.id, delta: -1)
-            } label: {
-                Image(systemName: item.cantidad == 1 ? "trash" : "minus")
-                    .frame(width: 44, height: 44)
-            }
-            .accessibilityLabel(item.cantidad == 1 ? "Quitar producto" : "Disminuir cantidad")
-
-            Text("\(item.cantidad)")
-                .font(.subheadline.weight(.semibold).monospacedDigit())
-                .frame(minWidth: 22)
-
-            Button {
-                carrito.cambiarCantidad(id: item.id, delta: 1)
-            } label: {
-                Image(systemName: "plus").frame(width: 44, height: 44)
-            }
-            .disabled(item.cantidad >= CarritoStore.maxPorItem)
-            .accessibilityLabel("Aumentar cantidad")
-        }
-        .buttonStyle(.borderless)
-        .foregroundStyle(AppColors.texto)
+        .tarjeta(padding: 12, radio: 20)
     }
 }

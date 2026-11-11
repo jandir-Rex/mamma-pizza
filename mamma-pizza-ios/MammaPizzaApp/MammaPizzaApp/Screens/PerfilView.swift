@@ -11,38 +11,43 @@ struct PerfilView: View {
         NavigationStack {
             List {
                 Section {
-                    HStack(spacing: 14) {
+                    VStack(spacing: 12) {
                         Text(inicial)
-                            .font(.title2.weight(.bold)).foregroundStyle(.white)
-                            .frame(width: 56, height: 56)
-                            .background(AppColors.primary, in: Circle())
+                            .font(.system(size: 36, weight: .bold, design: .serif))
+                            .foregroundStyle(AppColors.kraft)
+                            .frame(width: 88, height: 88)
+                            .background(AppColors.marcaDegradado, in: Circle())
                             .accessibilityHidden(true)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(auth.usuario?.nombre ?? "").font(.headline)
-                            Text(auth.usuario?.email ?? "").font(.subheadline).foregroundStyle(AppColors.gris)
+                        VStack(spacing: 2) {
+                            Text(auth.usuario?.nombre ?? "").font(.title3.weight(.bold))
+                            Text(auth.usuario?.email ?? "")
+                                .font(.subheadline).foregroundStyle(AppColors.gris)
                         }
                     }
-                    .padding(.vertical, 4)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .listRowBackground(Color.clear)
                     .accessibilityElement(children: .combine)
                 }
 
                 Section("Cuenta") {
                     NavigationLink { DireccionesView() } label: {
-                        Label("Mis direcciones", systemImage: "mappin.and.ellipse")
+                        FilaAjuste("Mis direcciones", icono: "mappin.and.ellipse", color: AppColors.primary)
                     }
                     Button { editando = true } label: {
-                        Label("Editar nombre", systemImage: "person.text.rectangle")
+                        FilaAjuste("Editar nombre", icono: "person.text.rectangle", color: AppColors.info)
                     }
                     .foregroundStyle(AppColors.texto)
                 }
 
                 Section {
-                    Button("Cerrar sesión", role: .destructive) { confirmandoLogout = true }
-                        .frame(maxWidth: .infinity)
+                    Button(role: .destructive) { confirmandoLogout = true } label: {
+                        Text("Cerrar sesión").frame(maxWidth: .infinity)
+                    }
                 }
             }
             .scrollContentBackground(.hidden)
-            .background(AppColors.bg)
+            .fondoApp()
             .navigationTitle("Mi perfil")
             .conCarritoFlotante()
             .confirmationDialog("¿Cerrar sesión?", isPresented: $confirmandoLogout, titleVisibility: .visible) {
@@ -50,6 +55,31 @@ struct PerfilView: View {
                 Button("Cancelar", role: .cancel) {}
             }
             .sheet(isPresented: $editando) { EditarNombreSheet() }
+        }
+    }
+}
+
+/// Fila estilo Ajustes de iOS: ícono blanco sobre cuadrado de color.
+private struct FilaAjuste: View {
+    let titulo: String
+    let icono: String
+    let color: Color
+
+    init(_ titulo: String, icono: String, color: Color) {
+        self.titulo = titulo
+        self.icono = icono
+        self.color = color
+    }
+
+    var body: some View {
+        Label {
+            Text(titulo)
+        } icon: {
+            Image(systemName: icono)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 30, height: 30)
+                .background(color, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
     }
 }

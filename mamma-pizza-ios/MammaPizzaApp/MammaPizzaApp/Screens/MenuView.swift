@@ -55,8 +55,13 @@ struct MenuView: View {
                     lista
                 }
             }
-            .background(AppColors.bg)
-            .navigationTitle("Menú")
+            .fondoApp()
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("MammaPizza").font(.marca(.headline)).foregroundStyle(AppColors.primary)
+                }
+            }
             .searchable(text: $consulta, prompt: "Buscar pizzas, bebidas, etc...")
             .conCarritoFlotante()
         }
@@ -66,31 +71,98 @@ struct MenuView: View {
         }
     }
 
+    // MARK: - Lista
+
     private var lista: some View {
-        List {
-            if secciones.isEmpty {
-                ContentUnavailableView("Aún no hay productos aquí", systemImage: "fork.knife")
-                    .listRowBackground(Color.clear)
-            }
-            ForEach(secciones, id: \.nombre) { seccion in
-                Section(seccion.nombre) {
-                    ForEach(seccion.productos) { p in
-                        let agotado = p.agotado
-                        TarjetaProducto(producto: p, agotado: agotado) {
-                            if !agotado { seleccionado = p }
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 30) {
+                if consulta.isEmpty { encabezado }
+
+                if secciones.isEmpty { vacio }
+
+                ForEach(secciones, id: \.nombre) { seccion in
+                    VStack(alignment: .leading, spacing: 14) {
+                        cabeceraSeccion(seccion.nombre, cantidad: seccion.productos.count)
+                        ForEach(seccion.productos) { p in
+                            let agotado = p.agotado
+                            TarjetaProducto(producto: p, agotado: agotado) {
+                                if !agotado { seleccionado = p }
+                            }
+                            .scrollTransition(.animated(.snappy)) { vista, fase in
+                                vista
+                                    .opacity(fase.isIdentity ? 1 : 0.5)
+                                    .scaleEffect(fase.isIdentity ? 1 : 0.97)
+                            }
                         }
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                     }
                 }
             }
+            .padding(.horizontal, 20)
+            .padding(.top, 14)
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .contentMargins(.bottom, 70, for: .scrollContent)
+        .contentMargins(.bottom, 80, for: .scrollContent)
+        .scrollDismissesKeyboard(.interactively)
         .safeAreaInset(edge: .top, spacing: 0) { chips }
         .refreshable { await menu.cargar() }
+    }
+
+    private var encabezado: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("NUESTRA CARTA")
+                .font(.caption.weight(.bold)).tracking(2)
+                .foregroundStyle(AppColors.primary)
+            Text("¿Qué se te antoja hoy?")
+                .font(.marca(.title))
+                .foregroundStyle(AppColors.texto)
+            Text("Elige, personaliza y te lo llevamos calientito.")
+                .font(.subheadline)
+                .foregroundStyle(AppColors.gris)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func cabeceraSeccion(_ nombre: String, cantidad: Int) -> some View {
+        HStack(spacing: 10) {
+            Text(nombre)
+                .font(.marca(.title2))
+                .foregroundStyle(AppColors.texto)
+                .accessibilityAddTraits(.isHeader)
+            Text("\(cantidad)")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(AppColors.cacaoTexto)
+                .padding(.horizontal, 8).padding(.vertical, 3)
+                .background(AppColors.kraftClaro, in: Capsule())
+            Rectangle().fill(AppColors.hairline).frame(height: 1)
+        }
+    }
+
+    private var vacio: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "fork.knife")
+                .font(.system(size: 30))
+                .foregroundStyle(AppColors.primary)
+                .frame(width: 72, height: 72)
+                .background(AppColors.kraftClaro, in: Circle())
+            Text("Aún no hay productos aquí")
+                .font(.marca(.title3))
+            Text(consulta.isEmpty ? "Prueba con otra categoría" : "No encontramos \"\(consulta)\"")
+                .font(.subheadline)
+                .foregroundStyle(AppColors.gris)
+            if seleccion != "Todas" {
+                Button("Ver todo el menú") { withAnimation(.snappy) { nav.categoriaMenu = "Todas" } }
+                    .buttonStyle(.secundario)
+                    .frame(maxWidth: 220)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 40)
+        .multilineTextAlignment(.center)
+    }
+
+    // MARK: - Chips
+
+    private func simbolo(_ cat: String) -> String {
+        cat == "Todas" ? "square.grid.2x2.fill" : iconoCategoria(cat)
     }
 
     private var chips: some View {
@@ -99,19 +171,23 @@ struct MenuView: View {
             HStack(spacing: 8) {
                 ForEach(categorias, id: \.self) { cat in
                     let activo = cat == seleccion
-                    Button { nav.categoriaMenu = cat } label: {
-                        Text(cat)
+                    Button { withAnimation(.snappy) { nav.categoriaMenu = cat } } label: {
+                        Label(cat, systemImage: simbolo(cat))
                             .font(.subheadline.weight(activo ? .bold : .medium))
-                            .padding(.horizontal, 16).padding(.vertical, 8)
+                            .padding(.horizontal, 14)
+                            .frame(minHeight: 40)
                             .foregroundStyle(activo ? Color.white : AppColors.texto)
                             .background(activo ? AppColors.primary : AppColors.surface, in: Capsule())
+                            .overlay(Capsule().strokeBorder(activo ? Color.clear : AppColors.hairline, lineWidth: 1))
+                            .shadow(color: activo ? AppColors.primary.opacity(0.3) : .clear, radius: 8, y: 3)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.presion)
                     .accessibilityAddTraits(activo ? .isSelected : [])
                 }
             }
-            .padding(.horizontal, 16).padding(.vertical, 8)
+            .padding(.horizontal, 20).padding(.vertical, 8)
         }
         .background(.bar)
+        .sensoryFeedback(.selection, trigger: nav.categoriaMenu)
     }
 }

@@ -15,11 +15,12 @@ struct SeguimientoPedidoView: View {
     private var colorEstado: Color { cancelado ? AppColors.danger : entregado ? AppColors.success : AppColors.primary }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: 20) {
             cabecera
 
             if !cancelado {
                 PasosPedidoView(pasos: pasos, indice: indice, creado: pedido.createdAt)
+                    .tarjeta()
             }
 
             if pedido.esDelivery && pedido.estado == "EN_CAMINO" {
@@ -35,18 +36,11 @@ struct SeguimientoPedidoView: View {
                 MapaEntregaView(etaMinutos: etaMinutos)
             }
 
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Detalle del pedido").font(.headline)
-                DetallePedidoView(pedido: pedido)
-            }
+            DetallePedidoView(pedido: pedido)
 
             if let onVerDetalles {
-                Button(action: onVerDetalles) {
-                    Text("Ver detalles").frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                .tint(AppColors.primary)
+                Button(action: onVerDetalles) { Text("Ver detalles") }
+                    .buttonStyle(.secundario)
             }
         }
     }
@@ -56,12 +50,13 @@ struct SeguimientoPedidoView: View {
             Image(systemName: EstadoPedidoUI.icono(pedido.estado))
                 .font(.title2.weight(.semibold))
                 .foregroundStyle(.white)
-                .frame(width: 52, height: 52)
-                .background(colorEstado, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .frame(width: 56, height: 56)
+                .background(colorEstado.gradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .symbolEffect(.pulse, isActive: pedido.activo)
             VStack(alignment: .leading, spacing: 2) {
                 Text(EstadoPedidoUI.titulo(pedido.estado))
-                    .font(.title3.weight(.heavy))
-                    .foregroundStyle(colorEstado)
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(AppColors.texto)
                 Text(EstadoPedidoUI.subtitulo(pedido.estado))
                     .font(.subheadline)
                     .foregroundStyle(AppColors.gris)
@@ -99,10 +94,10 @@ private struct PasosPedidoView: View {
                         Image(systemName: iconos[paso] ?? "circle")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(hecho ? .white : AppColors.grisClaro)
-                            .frame(width: 32, height: 32)
+                            .frame(width: 34, height: 34)
                             .background(Circle().fill(hecho ? AppColors.primary : AppColors.surface))
                             .overlay(Circle().stroke(hecho ? AppColors.primary : AppColors.hairline, lineWidth: 2))
-                            .shadow(color: i == indice ? AppColors.primary.opacity(0.3) : .clear, radius: 6)
+                            .shadow(color: i == indice ? AppColors.primary.opacity(0.35) : .clear, radius: 6)
                     }
                     Text(nombres[paso] ?? paso)
                         .font(.caption.weight(hecho ? .bold : .medium))
@@ -120,6 +115,7 @@ private struct PasosPedidoView: View {
                 .accessibilityAddTraits(i == indice ? .isSelected : [])
             }
         }
+        .animation(.snappy, value: indice)
     }
 }
 
@@ -194,27 +190,39 @@ private struct MapaEntregaView: View {
 private struct DetallePedidoView: View {
     let pedido: Pedido
 
+    private var esYape: Bool { pedido.metodoPago == "YAPE" }
+
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Detalle del pedido").font(.headline)
+
             ForEach(pedido.items) { it in
-                HStack {
-                    Text(it.nombre).lineLimit(1)
-                    Spacer()
-                    Text("x\(it.cantidad)")
-                    Text(it.subtotal.soles).frame(minWidth: 70, alignment: .trailing)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("\(it.cantidad)×")
+                        .font(.footnote.weight(.bold)).foregroundStyle(AppColors.primary)
+                    Text(it.nombre).font(.subheadline).foregroundStyle(AppColors.texto).lineLimit(2)
+                    Spacer(minLength: 8)
+                    Text(it.subtotal.soles).font(.subheadline).foregroundStyle(AppColors.gris)
                 }
-                .font(.footnote)
-                .foregroundStyle(AppColors.gris)
             }
+
             Divider()
-            HStack {
+
+            HStack(alignment: .firstTextBaseline) {
                 Text("Total").font(.headline)
                 Spacer()
-                Text(pedido.total.soles).font(.headline)
+                Text(pedido.total.soles).font(.precio(.title3)).foregroundStyle(AppColors.primary)
             }
-            .foregroundStyle(AppColors.texto)
+
+            Label(esYape ? "Pago con Yape" : "Pago en efectivo",
+                  systemImage: esYape ? "qrcode" : "banknote")
+                .font(.footnote).foregroundStyle(AppColors.gris)
+
+            if let vuelto = pedido.vuelto, vuelto > 0 {
+                Text("Vuelto a recibir: \(vuelto.soles)")
+                    .font(.footnote.weight(.semibold)).foregroundStyle(AppColors.texto)
+            }
         }
-        .padding(16)
-        .background(AppColors.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .tarjeta()
     }
 }

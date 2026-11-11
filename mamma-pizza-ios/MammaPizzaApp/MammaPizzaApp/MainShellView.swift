@@ -1,3 +1,4 @@
+
 import SwiftUI
 
 struct MainShellView: View {
@@ -10,16 +11,20 @@ struct MainShellView: View {
             HomeView()
                 .tabItem { Label("Inicio", systemImage: "house") }
                 .tag(TabPrincipal.inicio)
+
             MenuView()
                 .tabItem { Label("Menú", systemImage: "fork.knife") }
                 .tag(TabPrincipal.menu)
+
             PedidosHistorialView()
                 .tabItem { Label("Pedidos", systemImage: "receipt") }
                 .tag(TabPrincipal.pedidos)
+
             PerfilView()
                 .tabItem { Label("Perfil", systemImage: "person") }
                 .tag(TabPrincipal.perfil)
         }
+        .tint(AppColors.primary)
         .sheet(isPresented: $nav.mostrandoCarrito, onDismiss: {
             if nav.checkoutPendiente {
                 nav.checkoutPendiente = false
@@ -36,17 +41,22 @@ struct MainShellView: View {
 
 /// Reemplaza el `Positioned(BarraCarritoFlotante)` del Stack de MainShell.
 /// Se aplica DENTRO del NavigationStack de cada pestaña para que desaparezca al hacer push.
+
 struct CarritoFlotante: ViewModifier {
     @Environment(AppNavegacion.self) private var nav
 
     func body(content: Content) -> some View {
-        content.overlay(alignment: .bottomTrailing) {
+        content.overlay(alignment: .bottom) {
             BarraCarritoFlotante { nav.mostrandoCarrito = true }
-                .padding(16)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
         }
     }
 }
 
 extension View {
-    func conCarritoFlotante() -> some View { modifier(CarritoFlotante()) }
+    func conCarritoFlotante() -> some View {
+        modifier(CarritoFlotante())
+    }
 }
+

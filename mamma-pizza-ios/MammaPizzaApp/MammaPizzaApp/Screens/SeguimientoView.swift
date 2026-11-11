@@ -90,9 +90,24 @@ struct SeguimientoView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let pedido = vm.pedido {
                 ScrollView {
-                    SeguimientoPedidoView(pedido: pedido)
-                        .padding(.horizontal, 20).padding(.vertical, 12)
+                    VStack(spacing: 16) {
+                        // Pedido sin respuesta por mucho tiempo
+                        if pedido.demorado {
+                            AvisoDemora(enRevision: pedido.comprobanteEstado == "EN_REVISION")
+                        }
+
+                        // Yape: subir captura / en revisión / rechazado
+                        if pedido.yapePendiente {
+                            ComprobanteYapeCard(pedido: pedido) {
+                                await vm.cargar(silencioso: true)
+                            }
+                        }
+
+                        SeguimientoPedidoView(pedido: pedido)
+                    }
+                    .padding(.horizontal, 20).padding(.vertical, 12)
                 }
+                .scrollDismissesKeyboard(.interactively)
                 .refreshable { await vm.cargar(silencioso: true) }
             } else {
                 ContentUnavailableView {

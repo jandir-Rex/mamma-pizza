@@ -19,69 +19,78 @@ struct RegistroView: View {
     }
 
     var body: some View {
-        Form {
-            if let error {
-                Section {
-                    Label(error, systemImage: "exclamationmark.circle")
-                        .foregroundStyle(AppColors.danger)
-                        .font(.footnote)
+        ScrollView {
+            VStack(spacing: 24) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Únete a MammaPizza").font(.marca(.title))
+                    Text("Crea tu cuenta y pide en segundos")
+                        .font(.subheadline).foregroundStyle(AppColors.gris)
                 }
-            }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-            Section {
-                TextField("Nombre completo", text: $nombre)
-                    .textContentType(.name)
-                    .submitLabel(.next)
-                    .focused($campo, equals: .nombre)
-                    .onSubmit { campo = .email }
-
-                TextField("Email", text: $email)
-                    .textContentType(.emailAddress)
-                    .keyboardType(.emailAddress)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .submitLabel(.next)
-                    .focused($campo, equals: .email)
-                    .onSubmit { campo = .telefono }
-
-                TextField("Teléfono (opcional)", text: $telefono)
-                    .textContentType(.telephoneNumber)
-                    .keyboardType(.phonePad)
-                    .focused($campo, equals: .telefono)
-
-                SecureField("Contraseña", text: $password)
-                    .textContentType(.newPassword)
-                    .submitLabel(.go)
-                    .focused($campo, equals: .password)
-                    .onSubmit { if valido { Task { await registrar() } } }
-            } footer: {
-                Text("La contraseña debe tener al menos 6 caracteres.")
-            }
-
-            Section {
-                Button {
-                    Task { await registrar() }
-                } label: {
-                    HStack {
-                        if cargando { ProgressView() }
-                        Text("Crear cuenta").fontWeight(.semibold)
+                VStack(spacing: 12) {
+                    CampoFormulario(icono: "person") {
+                        TextField("Nombre completo", text: $nombre)
+                            .textContentType(.name)
+                            .submitLabel(.next)
+                            .focused($campo, equals: .nombre)
+                            .onSubmit { campo = .email }
                     }
-                    .frame(maxWidth: .infinity)
+                    CampoFormulario(icono: "envelope") {
+                        TextField("Email", text: $email)
+                            .textContentType(.emailAddress)
+                            .keyboardType(.emailAddress)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .submitLabel(.next)
+                            .focused($campo, equals: .email)
+                            .onSubmit { campo = .telefono }
+                    }
+                    CampoFormulario(icono: "phone") {
+                        TextField("Teléfono (opcional)", text: $telefono)
+                            .textContentType(.telephoneNumber)
+                            .keyboardType(.phonePad)
+                            .focused($campo, equals: .telefono)
+                    }
+                    CampoFormulario(icono: "lock") {
+                        SecureField("Contraseña", text: $password)
+                            .textContentType(.newPassword)
+                            .submitLabel(.go)
+                            .focused($campo, equals: .password)
+                            .onSubmit { if valido { Task { await registrar() } } }
+                    }
+
+                    Label("Mínimo 6 caracteres",
+                          systemImage: password.count >= 6 ? "checkmark.circle.fill" : "circle")
+                        .font(.footnote)
+                        .foregroundStyle(password.count >= 6 ? AppColors.success : AppColors.gris)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, 4)
+                        .animation(.snappy, value: password.count >= 6)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(!valido || cargando)
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
+
+                if let error { BannerError(error) }
+
+                Button { Task { await registrar() } } label: {
+                    HStack(spacing: 8) {
+                        if cargando { ProgressView() }
+                        Text("Crear cuenta")
+                    }
+                }
+                .buttonStyle(.primario)
+                .disabled(!valido)
             }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
         }
-        .scrollContentBackground(.hidden)
-        .background(AppColors.bg)
+        .scrollDismissesKeyboard(.interactively)
+        .background { FondoMarca() }
         .navigationTitle("Crear cuenta")
         .navigationBarTitleDisplayMode(.inline)
     }
 
     private func registrar() async {
+        guard !cargando else { return }
         campo = nil
         cargando = true
         error = nil
