@@ -1,8 +1,8 @@
-
 import SwiftUI
 
 struct MainShellView: View {
     @Environment(AppNavegacion.self) private var navegacion
+    @Environment(AuthStore.self) private var auth
 
     var body: some View {
         @Bindable var nav = navegacion
@@ -25,19 +25,44 @@ struct MainShellView: View {
                 .tag(TabPrincipal.perfil)
         }
         .tint(AppColors.primary)
+
+        // 1) Carrito. Al cerrarse decide: checkout si hay sesión, login si no.
         .sheet(isPresented: $nav.mostrandoCarrito, onDismiss: {
             if nav.checkoutPendiente {
                 nav.checkoutPendiente = false
-                nav.mostrandoCheckout = true
+
+                if auth.usuario != nil {
+                    nav.mostrandoCheckout = true
+                } else {
+                    nav.pedirLogin(paraPagar: true)
+                }
             }
         }) {
-            CarritoSheet { nav.checkoutPendiente = true }
+            CarritoSheet {
+                nav.checkoutPendiente = true
+            }
         }
+
+        // 2) Login como hoja. Si venía de pagar, al cerrarse sigue al checkout.
+        .sheet(isPresented: $nav.mostrandoLogin, onDismiss: {
+            if nav.checkoutTrasLogin {
+                nav.checkoutTrasLogin = false
+
+                if auth.usuario != nil {
+                    nav.mostrandoCheckout = true
+                }
+            }
+        }) {
+            LoginView(comoHoja: true)
+        }
+
+        // 3) Checkout
         .fullScreenCover(isPresented: $nav.mostrandoCheckout) {
             CheckoutFlowView()
         }
     }
 }
+
 
 /// Reemplaza el `Positioned(BarraCarritoFlotante)` del Stack de MainShell.
 /// Se aplica DENTRO del NavigationStack de cada pestaña para que desaparezca al hacer push.
@@ -47,9 +72,11 @@ struct CarritoFlotante: ViewModifier {
 
     func body(content: Content) -> some View {
         content.overlay(alignment: .bottom) {
-            BarraCarritoFlotante { nav.mostrandoCarrito = true }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
+            BarraCarritoFlotante {
+                nav.mostrandoCarrito = true
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
         }
     }
 }
@@ -59,4 +86,3 @@ extension View {
         modifier(CarritoFlotante())
     }
 }
-

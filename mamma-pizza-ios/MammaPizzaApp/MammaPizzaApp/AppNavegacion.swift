@@ -13,8 +13,17 @@ final class AppNavegacion {
     /// Permite abrir Checkout justo DESPUÉS de que la hoja del carrito termine de cerrarse.
     var checkoutPendiente = false
 
+    /// Login como hoja. Si `checkoutTrasLogin` es true, al ingresar sigue al pago.
+    var mostrandoLogin = false
+    var checkoutTrasLogin = false
+
     func irAMenu(_ categoria: String = "Todas") {
         categoriaMenu = categoria
         tab = .menu
+    }
+
+    func pedirLogin(paraPagar: Bool = false) {
+        checkoutTrasLogin = paraPagar
+        mostrandoLogin = true
     }
 }

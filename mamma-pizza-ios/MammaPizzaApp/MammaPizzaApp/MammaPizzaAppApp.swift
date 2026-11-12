@@ -20,28 +20,26 @@ struct MammaPizzaApp: App {
     }
 }
 
-/// Raíz de la app. Al cambiar `auth.usuario` (login, registro o logout)
-/// la pantalla cambia sola. El splash se muestra encima al arrancar.
+
+/// Raíz de la app. El splash se muestra encima al arrancar.
+
 struct RootView: View {
     @Environment(AuthStore.self) private var auth
     @State private var mostrandoSplash = true
 
     var body: some View {
         ZStack {
-            Group {
-                if auth.cargando {
-                    AppColors.bg.ignoresSafeArea()
-                } else if auth.usuario != nil {
-                    MainShellView().transition(.opacity)
-                } else {
-                    LoginView().transition(.opacity)
-                }
+            if auth.cargando {
+                AppColors.bg.ignoresSafeArea()
+            } else {
+                MainShellView().transition(.opacity)
             }
-            .animation(.easeInOut(duration: 0.28), value: auth.usuario)
 
             if mostrandoSplash || auth.cargando {
                 SplashView {
-                    withAnimation(.easeInOut(duration: 0.5)) { mostrandoSplash = false }
+                    withAnimation(.easeInOut(duration: 0.5)) {
+                        mostrandoSplash = false
+                    }
                 }
                 .transition(.opacity)
                 .zIndex(1)

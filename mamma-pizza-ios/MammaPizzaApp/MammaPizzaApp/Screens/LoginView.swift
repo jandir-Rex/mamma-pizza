@@ -2,11 +2,17 @@ import SwiftUI
 
 struct LoginView: View {
     @Environment(AuthStore.self) private var auth
+
+    // NUEVO: soporte para mostrar Login como hoja
+    var comoHoja = false
+    @Environment(\.dismiss) private var dismiss
+
     @State private var email = ""
     @State private var password = ""
     @State private var verPassword = false
     @State private var cargando = false
     @State private var error: String?
+
     @FocusState private var campo: Campo?
 
     private enum Campo { case email, password }
@@ -19,6 +25,7 @@ struct LoginView: View {
                 VStack(spacing: 28) {
                     VStack(spacing: 8) {
                         MammaPizzaLogo()
+
                         Text("El sabor de la felicidad")
                             .font(.subheadline.italic())
                             .foregroundStyle(AppColors.gris)
@@ -26,9 +33,14 @@ struct LoginView: View {
                     .padding(.top, 32)
 
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Bienvenido de nuevo").font(.marca(.title))
-                        Text("Ingresa para pedir tu pizza favorita")
-                            .font(.subheadline).foregroundStyle(AppColors.gris)
+                        Text("Bienvenido de nuevo")
+                            .font(.marca(.title))
+
+                        // NUEVO: subtítulo dinámico
+                        Text(comoHoja ? "Inicia sesión para completar tu pedido"
+                                      : "Ingresa para pedir tu pizza favorita")
+                            .font(.subheadline)
+                            .foregroundStyle(AppColors.gris)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -57,7 +69,9 @@ struct LoginView: View {
                             .autocorrectionDisabled()
                             .submitLabel(.go)
                             .focused($campo, equals: .password)
-                            .onSubmit { if valido { Task { await ingresar() } } }
+                            .onSubmit {
+                                if valido { Task { await ingresar() } }
+                            }
 
                             Button { verPassword.toggle() } label: {
                                 Image(systemName: verPassword ? "eye.slash" : "eye")
@@ -81,8 +95,12 @@ struct LoginView: View {
 
                     NavigationLink { RegistroView() } label: {
                         HStack(spacing: 4) {
-                            Text("¿No tienes cuenta?").foregroundStyle(AppColors.gris)
-                            Text("Regístrate").fontWeight(.semibold).foregroundStyle(AppColors.primary)
+                            Text("¿No tienes cuenta?")
+                                .foregroundStyle(AppColors.gris)
+
+                            Text("Regístrate")
+                                .fontWeight(.semibold)
+                                .foregroundStyle(AppColors.primary)
                         }
                         .font(.subheadline)
                         .frame(minHeight: 44)
@@ -94,17 +112,36 @@ struct LoginView: View {
             .scrollDismissesKeyboard(.interactively)
             .background { FondoMarca() }
             .navigationBarTitleDisplayMode(.inline)
+
+            // NUEVO: controles y comportamiento cuando Login es una hoja
+            .toolbar {
+                if comoHoja {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Cerrar") { dismiss() }
+                    }
+                }
+            }
+            .onChange(of: auth.usuario != nil) { _, hay in
+                if hay && comoHoja { dismiss() }
+            }
+            .interactiveDismissDisabled(cargando)
         }
     }
 
     private func ingresar() async {
         guard !cargando else { return }
+
         campo = nil
         cargando = true
         error = nil
+
         defer { cargando = false }
+
         do {
-            try await auth.login(email: email.trimmingCharacters(in: .whitespaces), password: password)
+            try await auth.login(
+                email: email.trimmingCharacters(in: .whitespaces),
+                password: password
+            )
         } catch {
             self.error = error.localizedDescription
         }

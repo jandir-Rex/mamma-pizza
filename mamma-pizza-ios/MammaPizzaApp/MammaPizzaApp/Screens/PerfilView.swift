@@ -5,7 +5,9 @@ struct PerfilView: View {
     @State private var editando = false
     @State private var confirmandoLogout = false
 
-    private var inicial: String { String((auth.usuario?.nombre ?? "?").prefix(1)).uppercased() }
+    private var inicial: String {
+        String((auth.usuario?.nombre ?? "?").prefix(1)).uppercased()
+    }
 
     var body: some View {
         NavigationStack {
@@ -18,10 +20,14 @@ struct PerfilView: View {
                             .frame(width: 88, height: 88)
                             .background(AppColors.marcaDegradado, in: Circle())
                             .accessibilityHidden(true)
+
                         VStack(spacing: 2) {
-                            Text(auth.usuario?.nombre ?? "").font(.title3.weight(.bold))
+                            Text(auth.usuario?.nombre ?? "")
+                                .font(.title3.weight(.bold))
+
                             Text(auth.usuario?.email ?? "")
-                                .font(.subheadline).foregroundStyle(AppColors.gris)
+                                .font(.subheadline)
+                                .foregroundStyle(AppColors.gris)
                         }
                     }
                     .frame(maxWidth: .infinity)
@@ -31,18 +37,32 @@ struct PerfilView: View {
                 }
 
                 Section("Cuenta") {
-                    NavigationLink { DireccionesView() } label: {
-                        FilaAjuste("Mis direcciones", icono: "mappin.and.ellipse", color: AppColors.primary)
+                    NavigationLink {
+                        DireccionesView()
+                    } label: {
+                        FilaAjuste(
+                            "Mis direcciones",
+                            icono: "mappin.and.ellipse",
+                            color: AppColors.primary
+                        )
                     }
+
                     Button { editando = true } label: {
-                        FilaAjuste("Editar nombre", icono: "person.text.rectangle", color: AppColors.info)
+                        FilaAjuste(
+                            "Editar nombre",
+                            icono: "person.text.rectangle",
+                            color: AppColors.info
+                        )
                     }
                     .foregroundStyle(AppColors.texto)
                 }
 
                 Section {
-                    Button(role: .destructive) { confirmandoLogout = true } label: {
-                        Text("Cerrar sesión").frame(maxWidth: .infinity)
+                    Button(role: .destructive) {
+                        confirmandoLogout = true
+                    } label: {
+                        Text("Cerrar sesión")
+                            .frame(maxWidth: .infinity)
                     }
                 }
             }
@@ -50,16 +70,33 @@ struct PerfilView: View {
             .fondoApp()
             .navigationTitle("Mi perfil")
             .conCarritoFlotante()
-            .confirmationDialog("¿Cerrar sesión?", isPresented: $confirmandoLogout, titleVisibility: .visible) {
-                Button("Cerrar sesión", role: .destructive) { auth.logout() }
+            .confirmationDialog(
+                "¿Cerrar sesión?",
+                isPresented: $confirmandoLogout,
+                titleVisibility: .visible
+            ) {
+                Button("Cerrar sesión", role: .destructive) {
+                    auth.logout()
+                }
+
                 Button("Cancelar", role: .cancel) {}
             }
-            .sheet(isPresented: $editando) { EditarNombreSheet() }
+            .sheet(isPresented: $editando) {
+                EditarNombreSheet()
+            }
         }
+        // NUEVO: requiere sesión para mostrar el perfil
+        .sesionRequerida(
+            titulo: "Tu perfil",
+            mensaje: "Inicia sesión para ver tus datos y direcciones",
+            icono: "person.crop.circle"
+        )
     }
 }
 
+
 /// Fila estilo Ajustes de iOS: ícono blanco sobre cuadrado de color.
+
 private struct FilaAjuste: View {
     let titulo: String
     let icono: String
@@ -84,6 +121,7 @@ private struct FilaAjuste: View {
     }
 }
 
+
 private struct EditarNombreSheet: View {
     @Environment(AuthStore.self) private var auth
     @Environment(\.dismiss) private var dismiss
@@ -95,29 +133,47 @@ private struct EditarNombreSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Nombre completo", text: $nombre).textContentType(.name)
+                    TextField("Nombre completo", text: $nombre)
+                        .textContentType(.name)
                 } footer: {
-                    if let error { Text(error).foregroundStyle(AppColors.danger) }
+                    if let error {
+                        Text(error)
+                            .foregroundStyle(AppColors.danger)
+                    }
                 }
             }
             .navigationTitle("Editar nombre")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancelar") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancelar") { dismiss() }
+                }
+
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Guardar") { Task { await guardar() } }.disabled(guardando)
+                    Button("Guardar") {
+                        Task { await guardar() }
+                    }
+                    .disabled(guardando)
                 }
             }
-            .onAppear { nombre = auth.usuario?.nombre ?? "" }
+            .onAppear {
+                nombre = auth.usuario?.nombre ?? ""
+            }
         }
         .presentationDetents([.medium])
     }
 
     private func guardar() async {
         let limpio = nombre.trimmingCharacters(in: .whitespaces)
-        guard limpio.count >= 2 else { error = "Nombre muy corto"; return }
+
+        guard limpio.count >= 2 else {
+            error = "Nombre muy corto"
+            return
+        }
+
         guardando = true
         defer { guardando = false }
+
         do {
             try await auth.actualizarPerfil(nombre: limpio)
             dismiss()
