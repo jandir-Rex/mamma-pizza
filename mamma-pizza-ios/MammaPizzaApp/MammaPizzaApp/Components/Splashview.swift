@@ -6,6 +6,7 @@ struct SplashView: View {
     var onTerminar: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reducir
+    @Environment(\.scenePhase) private var scenePhase
     @State private var anillo: CGFloat = 0
     @State private var emblema = false
     @State private var letras = false
@@ -22,7 +23,9 @@ struct SplashView: View {
             Circle().fill(AppColors.kraft.opacity(0.08)).frame(width: 380).offset(x: 140, y: -300)
             Circle().fill(AppColors.tomate.opacity(0.16)).frame(width: 240).offset(x: -150, y: 320)
 
-            if !reducir { Brasas().ignoresSafeArea() }
+            if !reducir && scenePhase == .active {
+                Brasas().ignoresSafeArea()
+            }
 
             VStack(spacing: 34) {
                 emblemaView

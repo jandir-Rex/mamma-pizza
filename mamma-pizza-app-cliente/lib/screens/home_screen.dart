@@ -138,22 +138,31 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Aparecer(indice: 1, child: _Banner(onVerMenu: () => widget.onVerMenu("Todas"))),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
                 child: Aparecer(
                   indice: 2,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Expanded(child: Text("Categorías", style: AppFonts.titulo(size: 24))),
+                          Expanded(child: Text("Categorías", style: AppFonts.titulo(size: 22))),
                           TextButton(
                             onPressed: () => widget.onVerMenu("Todas"),
-                            child: const Text("Ver todas"),
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppColors.primary,
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              minimumSize: const Size(0, 36),
+                            ),
+                            child: Text(
+                              "Ver todas",
+                              style: AppFonts.cuerpo(size: 12.5, peso: FontWeight.w600, color: AppColors.primary),
+                            ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 10),
                       Row(
                         children: [
                           Expanded(
@@ -191,8 +200,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 28, 20, 12),
-                child: Text("Recomendados para ti", style: AppFonts.titulo(size: 24)),
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 10),
+                child: Text("Recomendados para ti", style: AppFonts.titulo(size: 22)),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -229,46 +238,65 @@ class _Cabecera extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 12),
-            Text("Mamma Pizza", style: AppFonts.marca(size: 22, color: AppColors.kraft)),
-            Text(
-              "El sabor de la felicidad",
-              style: AppFonts.cuerpo(size: 12, color: AppColors.kraftLight),
+            const SizedBox(height: AppSpace.s),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  "Mamma Pizza",
+                  style: AppFonts.marca(size: 22, color: AppColors.kraft),
+                ),
+                const SizedBox(width: AppSpace.s),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 3),
+                  child: Text(
+                    "El sabor de la felicidad",
+                    style: AppFonts.cuerpo(
+                      size: 11,
+                      color: AppColors.kraftLight.withValues(alpha: 0.85),
+                    ).copyWith(letterSpacing: 0.4),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 22),
-            Text(saludo, style: AppFonts.cuerpo(size: 14, color: AppColors.kraftLight)),
+            const SizedBox(height: AppSpace.l),
+            Text(
+              saludo.toUpperCase(),
+              style: AppFonts.cuerpo(
+                size: 11,
+                peso: FontWeight.w600,
+                color: AppColors.kraftLight.withValues(alpha: 0.9),
+              ).copyWith(letterSpacing: 1.2),
+            ),
             const SizedBox(height: 2),
             Text(
               nombre.isEmpty ? "¡Hola! 👋" : "$nombre 👋",
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppFonts.marca(size: 32, color: Colors.white),
+              style: AppFonts.marca(size: 28, color: Colors.white),
             ),
-            const SizedBox(height: 4),
-            Text(
-              "¿Qué antojo tienes hoy?",
-              style: AppFonts.cuerpo(size: 14, color: AppColors.kraftLight),
-            ),
-            const SizedBox(height: 18),
+            const SizedBox(height: AppSpace.m),
             Presionable(
               onTap: onBuscar,
               etiquetaSemantica: "Buscar en el menú",
               child: Container(
-                height: 52,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                height: 48,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: AppShadows.suave,
+                  color: Colors.white.withValues(alpha: 0.96),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.kraft.withValues(alpha: 0.6)),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.search, color: AppColors.cacao, size: 22),
-                    const SizedBox(width: 10),
+                    const Icon(Icons.search_rounded, color: AppColors.cacao, size: 20),
+                    const SizedBox(width: AppSpace.s),
                     Expanded(
                       child: Text(
                         "Buscar pizzas, bebidas, etc...",
-                        style: AppFonts.cuerpo(size: 14, color: AppColors.gray),
+                        style: AppFonts.cuerpo(size: 13.5, color: AppColors.gray),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -290,68 +318,72 @@ class _Banner extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      constraints: const BoxConstraints(minHeight: 168),
+      constraints: const BoxConstraints(minHeight: 128),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         gradient: AppGradients.kraft,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(color: AppColors.kraftDark.withValues(alpha: 0.5)),
         boxShadow: AppShadows.suave,
       ),
       child: Stack(
         children: [
           Positioned(
-            right: -34,
+            right: -24,
             top: 0,
             bottom: 0,
             child: Center(
               child: Container(
-                width: 150,
-                height: 150,
+                width: 112,
+                height: 112,
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: AppGradients.cacao,
                 ),
                 child: const ExcludeSemantics(
-                  child: Icon(Icons.local_pizza, size: 80, color: AppColors.kraft),
+                  child: Icon(Icons.local_pizza, size: 60, color: AppColors.kraft),
                 ),
               ),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(18, 18, 130, 18),
+            padding: const EdgeInsets.fromLTRB(16, 14, 108, 14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: AppColors.tomate,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    "Hecha al momento",
-                    style: AppFonts.cuerpo(size: 12, peso: FontWeight.w600, color: Colors.white),
+                    "HECHA AL MOMENTO",
+                    style: AppFonts.cuerpo(size: 10, peso: FontWeight.w700, color: Colors.white)
+                        .copyWith(letterSpacing: 0.8),
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 Text(
-                  "El sabor de la felicidad",
-                  style: AppFonts.marca(size: 22, color: AppColors.cacaoDark),
+                  "La verdadera pizza",
+                  style: AppFonts.marca(size: 20, color: AppColors.cacaoDark),
                 ),
-                const SizedBox(height: 12),
+                Text(
+                  "es una buena idea",
+                  style: AppFonts.marca(size: 20, color: AppColors.cacaoDark),
+                ),
+                const SizedBox(height: 10),
                 Presionable(
                   onTap: onVerMenu,
                   haptico: Haptico.ligero,
                   etiquetaSemantica: "Ver menú",
                   child: Container(
-                    constraints: const BoxConstraints(minHeight: 48),
-                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    constraints: const BoxConstraints(minHeight: 36),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
                     decoration: BoxDecoration(
-                      color: AppColors.tomate,
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: AppShadows.brillo(AppColors.tomate),
+                      color: AppColors.cacaoDark,
+                      borderRadius: BorderRadius.circular(20),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -359,10 +391,10 @@ class _Banner extends StatelessWidget {
                       children: [
                         Text(
                           "Ver menú",
-                          style: AppFonts.cuerpo(size: 14, peso: FontWeight.w600, color: Colors.white),
+                          style: AppFonts.cuerpo(size: 12.5, peso: FontWeight.w600, color: AppColors.kraft),
                         ),
-                        const SizedBox(width: 6),
-                        const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 16),
+                        const SizedBox(width: 5),
+                        const Icon(Icons.arrow_forward_rounded, color: AppColors.kraft, size: 14),
                       ],
                     ),
                   ),
@@ -388,24 +420,26 @@ class _CatItem extends StatelessWidget {
       onTap: onTap,
       etiquetaSemantica: "Categoría $label",
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(vertical: 2),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 68,
-              height: 68,
+              width: 60,
+              height: 60,
               decoration: BoxDecoration(
                 color: AppColors.kraftLight,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.kraft),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: AppColors.kraft.withValues(alpha: 0.8)),
               ),
-              child: Icon(icon, color: AppColors.cacao, size: 30),
+              child: Icon(icon, color: AppColors.cacao, size: 26),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
               label,
-              style: AppFonts.cuerpo(size: 12, peso: FontWeight.w600),
+              style: AppFonts.cuerpo(size: 11.5, peso: FontWeight.w600, color: AppColors.dark),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),

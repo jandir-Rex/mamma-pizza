@@ -6,10 +6,15 @@ struct HomeView: View {
     @Environment(AppNavegacion.self) private var nav
     @State private var seleccionado: Producto?
 
-    private let categorias: [(nombre: String, simbolo: String)] = [
-        ("Pizzas", "fork.knife"), ("Entradas", "takeoutbag.and.cup.and.straw"),
-        ("Bebidas", "cup.and.saucer.fill"), ("Postres", "birthday.cake.fill")
-    ]
+    /// Categorías derivadas del menú del backend. Se recalculan cuando llegan los productos.
+    /// El orden respeta el orden en que aparecen en el menú.
+    private var categorias: [(nombre: String, simbolo: String)] {
+        var vistos = Set<String>()
+        let unicas = menu.productos
+            .map(\.categoriaNombre)
+            .filter { !$0.isEmpty && vistos.insert($0).inserted }
+        return unicas.map { (nombre: $0, simbolo: iconoCategoria($0)) }
+    }
 
     private var nombre: String {
         auth.usuario?.nombre.split(separator: " ").first.map(String.init) ?? ""
@@ -54,51 +59,73 @@ struct HomeView: View {
 
     private var contenido: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(saludo).font(.subheadline).foregroundStyle(AppColors.gris)
-                    Text(nombre.isEmpty ? "👋" : "\(nombre) 👋")
-                        .font(.system(.largeTitle, design: .rounded, weight: .heavy))
+            VStack(alignment: .leading, spacing: 20) {
+                if !nombre.isEmpty {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(saludo.uppercased())
+                            .font(.system(size: 11, weight: .bold))
+                            .tracking(1.2)
+                            .foregroundStyle(AppColors.primary)
+                        Text(nombre)
+                            .font(.marca(.title))
+                            .foregroundStyle(AppColors.texto)
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
 
                 Button { nav.irAMenu() } label: {
-                    Label("Buscar pizzas, bebidas, etc...", systemImage: "magnifyingglass")
-                        .foregroundStyle(AppColors.gris)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 14).frame(height: 48)
-                        .background(AppColors.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(AppColors.hairline, lineWidth: 1))
+                    HStack(spacing: 10) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(AppColors.cacao)
+                        Text("Buscar pizzas, bebidas, etc...")
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundStyle(AppColors.gris)
+                            .lineLimit(1)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 14)
+                    .frame(height: 46)
+                    .background(AppColors.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(AppColors.hairline, lineWidth: 1))
                 }
                 .buttonStyle(.presion)
 
                 banner
 
-                VStack(alignment: .leading, spacing: 14) {
-                    EncabezadoSeccion("Categorías", boton: "Ver todas") { nav.irAMenu() }
-                    HStack(spacing: 12) {
-                        ForEach(categorias, id: \.nombre) { c in
-                            Button { nav.irAMenu(c.nombre) } label: {
-                                VStack(spacing: 8) {
-                                    Image(systemName: c.simbolo)
-                                        .font(.title2)
-                                        .foregroundStyle(AppColors.primary)
-                                        .frame(maxWidth: .infinity)
-                                        .frame(height: 64)
-                                        .background(AppColors.kraftClaro,
-                                                    in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                                    Text(c.nombre)
-                                        .font(.caption.weight(.medium))
-                                        .foregroundStyle(AppColors.texto)
+                if !categorias.isEmpty {
+                    VStack(alignment: .leading, spacing: 14) {
+                        EncabezadoSeccion("Categorías", boton: "Ver todas") { nav.irAMenu() }
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 12) {
+                                ForEach(categorias, id: \.nombre) { c in
+                                    Button { nav.irAMenu(c.nombre) } label: {
+                                        VStack(spacing: 8) {
+                                            Image(systemName: c.simbolo)
+                                                .font(.title2)
+                                                .foregroundStyle(AppColors.primary)
+                                                .frame(width: 64, height: 64)
+                                                .background(AppColors.kraftClaro,
+                                                            in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                            Text(c.nombre)
+                                                .font(.caption.weight(.medium))
+                                                .foregroundStyle(AppColors.texto)
+                                                .lineLimit(1)
+                                        }
+                                        .frame(width: 76)
+                                    }
+                                    .buttonStyle(.presion)
                                 }
                             }
-                            .buttonStyle(.presion)
+                            .padding(.horizontal, 20)
                         }
+                        .padding(.horizontal, -20)
                     }
                 }
 
                 VStack(alignment: .leading, spacing: 14) {
-                    EncabezadoSeccion("Recomendados para ti")
+                    EncabezadoSeccion(nombre.isEmpty ? "Nuestras favoritas" : "Recomendados para ti")
                     if recomendados.isEmpty {
                         Text("Pronto tendremos recomendaciones para ti")
                             .foregroundStyle(AppColors.gris)
@@ -117,43 +144,5 @@ struct HomeView: View {
         .refreshable { await menu.cargar() }
     }
 
-    private var banner: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("HECHA AL HORNO")
-                .font(.caption.weight(.bold)).tracking(1.5)
-                .foregroundStyle(AppColors.mostaza)
-            Text("La verdadera pizza\nes una buena idea")
-                .font(.marca(.title2))
-                .foregroundStyle(.white)
-                .fixedSize(horizontal: false, vertical: true)
-            Button { nav.irAMenu() } label: {
-                Label("Ver menú", systemImage: "arrow.right")
-                    .font(.footnote.weight(.bold))
-                    .foregroundStyle(AppColors.cacao)
-                    .padding(.horizontal, 16).frame(minHeight: 36)
-                    .background(AppColors.kraft, in: Capsule())
-            }
-            .buttonStyle(.presion)
-            .padding(.top, 10)
-        }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            ZStack(alignment: .topTrailing) {
-                AppColors.marcaDegradado
-                Circle().fill(AppColors.kraft.opacity(0.10)).frame(width: 220).offset(x: 70, y: -80)
-                Circle().fill(AppColors.tomate.opacity(0.22)).frame(width: 110).offset(x: 30, y: 90)
-            }
-        }
-        .overlay(alignment: .trailing) {
-            Image(systemName: "flame.fill")
-                .font(.system(size: 64))
-                .foregroundStyle(AppColors.mostaza)
-                .rotationEffect(.degrees(-10))
-                .padding(.trailing, 24)
-                .accessibilityHidden(true)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .accessibilityElement(children: .contain)
-    }
+    private var banner: some View { AdCarousel(onVerMenu: { nav.irAMenu() }) }
 }

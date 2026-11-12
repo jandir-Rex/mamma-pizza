@@ -1,8 +1,9 @@
 import Foundation
 
 enum AppConfig {
-    // Simulador: localhost funciona. iPhone físico: usa la IP de tu Mac (ej. 192.168.1.X).
-    static let host = "http://localhost:4000"
+    // URL pública de InstaBox (apunta al puerto 4000 de tu Mac).
+    // Para desarrollo local, puedes cambiar esto a "http://localhost:4000".
+    static let host = "https://4000-agqyupg2egluipq35eyr4qw4aa.instabox.tech"
     static var apiBaseURL: String { host + "/api" }
     static var socketURL: URL { URL(string: host)! }
 

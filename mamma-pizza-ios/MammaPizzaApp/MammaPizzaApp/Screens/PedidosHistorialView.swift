@@ -64,10 +64,13 @@ struct PedidosHistorialView: View {
             await cargar()
         }
 
-        // NUEVO: limpiar pedidos cuando se cierra sesión
-        .onChange(of: auth.usuario == nil) { _, sinSesion in
-            if sinSesion {
-                pedidos = []
+        // Limpiar pedidos cuando cambia el usuario (logout o cambio de cuenta).
+        // Observamos el ID (no el Bool `usuario == nil`) porque si el usuario A cierra sesión
+        // y entra B directamente, el Bool no cambia, pero el ID sí.
+        .onChange(of: auth.usuario?.id) { _, nuevoId in
+            pedidos = []
+            if nuevoId != nil {
+                Task { await cargar() }
             }
         }
 

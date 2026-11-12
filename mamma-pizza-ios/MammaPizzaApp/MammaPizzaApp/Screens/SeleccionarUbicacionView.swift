@@ -42,7 +42,7 @@ struct SeleccionarUbicacionView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 if !AppConfig.mapboxConfigurado {
-                    Text("Falta un token público de Mapbox (pk.) en Config.xcconfig.")
+                    Text("Falta un token público de Mapbox (pk.) en AppConfig.swift.")
                         .font(.footnote)
                         .foregroundStyle(AppColors.danger)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -191,7 +191,9 @@ struct SeleccionarUbicacionView: View {
                 }
             }
             .buttonStyle(.primario)
-            .disabled(guardando)
+            // Deshabilitar hasta que sea válido: ubicación elegida + dirección escrita.
+            // Se evita que el usuario toque el botón y reciba un error después.
+            .disabled(guardando || !ubicacionElegida || direccion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .padding(.horizontal, 20)
         .padding(.top, 16)

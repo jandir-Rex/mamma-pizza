@@ -12,10 +12,27 @@ struct RegistroView: View {
 
     private enum Campo { case nombre, email, telefono, password }
 
+    private var emailValido: Bool {
+        let t = email.trimmingCharacters(in: .whitespaces)
+        return t.range(of: #"^[^@\s]+@[^@\s]+\.[^@\s]+$"#, options: .regularExpression) != nil
+    }
+
     private var valido: Bool {
         nombre.trimmingCharacters(in: .whitespaces).count >= 2
-            && email.contains("@")
+            && emailValido
             && password.count >= 6
+    }
+
+    /// Texto de ayuda que dice EXACTAMENTE qué falta para poder registrarse.
+    /// Devuelve `nil` si ya está todo válido o si el usuario aún no escribió nada.
+    private var ayudaValidacion: String? {
+        let hayAlgoEscrito = !nombre.isEmpty || !email.isEmpty || !password.isEmpty
+        guard hayAlgoEscrito, !valido else { return nil }
+
+        if nombre.trimmingCharacters(in: .whitespaces).count < 2 { return "Ingresa tu nombre completo" }
+        if !emailValido { return "El email no tiene un formato válido" }
+        if password.count < 6 { return "La contraseña debe tener al menos 6 caracteres" }
+        return nil
     }
 
     var body: some View {
@@ -78,10 +95,24 @@ struct RegistroView: View {
                     }
                 }
                 .buttonStyle(.primario)
-                .disabled(!valido)
+                .disabled(!valido || cargando)
+
+                if let ayuda = ayudaValidacion {
+                    HStack(spacing: 6) {
+                        Image(systemName: "info.circle")
+                            .font(.footnote)
+                        Text(ayuda)
+                            .font(.footnote)
+                    }
+                    .foregroundStyle(AppColors.gris)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 4)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
+            .animation(.easeInOut(duration: 0.2), value: ayudaValidacion)
         }
         .scrollDismissesKeyboard(.interactively)
         .background { FondoMarca() }

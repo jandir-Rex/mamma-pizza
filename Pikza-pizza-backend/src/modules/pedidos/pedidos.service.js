@@ -223,6 +223,16 @@ async function crearPedido(clienteId, rolSolicitante, datos, solicitante) {
       });
     }
 
+    // Tope de cantidad total: defensa contra pedidos absurdos aunque cada ítem esté dentro del límite
+    const cantidadTotal = itemsParaCrear.reduce((sum, it) => sum + it.cantidad, 0);
+    if (cantidadTotal > 100) {
+      const error = new Error(
+        `Pedido demasiado grande (${cantidadTotal} unidades). Máximo 100 unidades por pedido. Contáctanos para pedidos especiales.`
+      );
+      error.status = 400;
+      throw error;
+    }
+
     // Efectivo: el monto con el que paga debe cubrir el total (si no, no hay vuelto posible)
     if (metodoPago === "EFECTIVO" && pagaCon != null && pagaCon < subtotal) {
       const error = new Error("El monto con el que pagas debe cubrir el total del pedido");

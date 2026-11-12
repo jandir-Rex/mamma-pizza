@@ -11,6 +11,7 @@ struct ProductoDetalleSheet: View {
     @State private var notas = ""
     @State private var cantidad = 1
     @State private var agregado = false
+    @State private var mostrarTopeAlcanzado = false
 
     init(producto: Producto, agregados: [Agregado]) {
         self.producto = producto
@@ -55,6 +56,11 @@ struct ProductoDetalleSheet: View {
         .presentationDetents([.fraction(0.8), .large])
         .presentationDragIndicator(.visible)
         .presentationBackground(AppColors.bg)
+        .alert("Llegaste al máximo por producto", isPresented: $mostrarTopeAlcanzado) {
+            Button("Entendido") { dismiss() }
+        } message: {
+            Text("Solo puedes tener hasta \(CarritoStore.maxPorItem) unidades de este producto en tu pedido. Ya ajustamos la cantidad por ti.")
+        }
     }
 
     // MARK: Secciones
@@ -177,10 +183,15 @@ struct ProductoDetalleSheet: View {
     private func agregarAlCarrito() {
         guard let v = variante else { return }
         let elegidos = agregados.filter { seleccionados.contains($0.id) }
-        carrito.agregar(ItemCarrito(producto: producto, variante: v, agregados: elegidos,
-                                    cantidad: cantidad,
-                                    notas: notas.trimmingCharacters(in: .whitespacesAndNewlines)))
+        let recortado = carrito.agregar(ItemCarrito(producto: producto, variante: v, agregados: elegidos,
+                                                    cantidad: cantidad,
+                                                    notas: notas.trimmingCharacters(in: .whitespacesAndNewlines)))
         agregado.toggle()
-        dismiss()
+        if recortado {
+            // No cerramos: mostramos alerta primero para que el usuario se entere.
+            mostrarTopeAlcanzado = true
+        } else {
+            dismiss()
+        }
     }
 }

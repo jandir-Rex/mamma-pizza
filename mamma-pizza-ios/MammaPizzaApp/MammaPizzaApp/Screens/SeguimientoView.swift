@@ -26,8 +26,14 @@ final class SeguimientoViewModel {
     }
 
     /// Vive mientras la vista esté en pantalla (se lanza con .task).
+    /// Si el pedido ya no está activo (ENTREGADO o CANCELADO), no se conecta al socket
+    /// ni hace polling: ahorra batería y datos cuando ya no hay nada que escuchar.
     func correr() async {
         await cargar()
+
+        // Si el pedido ya está cerrado, no hay nada que escuchar.
+        if pedido?.activo == false { return }
+
         escuchar()
         defer { dejarDeEscuchar() }
 
@@ -35,11 +41,13 @@ final class SeguimientoViewModel {
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(30))
             if Task.isCancelled { break }
-            if pedido?.activo ?? true { await cargar(silencioso: true) }
+            if pedido?.activo == false { break }   // detener polling al cerrarse
+            await cargar(silencioso: true)
         }
     }
 
     private func escuchar() {
+        guard pedido?.activo != false else { return }
         guard let socket = SocketService.shared.conectar() else { return }
 
         idConnect = socket.on(clientEvent: .connect) { [weak self] _, _ in

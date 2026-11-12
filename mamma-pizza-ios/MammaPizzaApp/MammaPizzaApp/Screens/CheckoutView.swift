@@ -184,14 +184,22 @@ struct CheckoutView: View {
     private func cargarDirecciones() async {
         cargando = true
         defer { cargando = false }
-        if let lista = try? await DireccionesService.listar() {
+        do {
+            let lista = try await DireccionesService.listar()
             direcciones = lista
             if seleccionadaId == nil { seleccionadaId = lista.first?.id }
+        } catch {
+            // Mostrar error real: si tiene direcciones guardadas pero no hay red, debe saberlo.
+            self.error = "No pudimos cargar tus direcciones. Revisa tu conexión e inténtalo de nuevo."
         }
     }
 
     private func confirmar() async {
         guard !enviando else { return }
+        guard !carrito.items.isEmpty else {
+            error = "Tu carrito está vacío. Agrega productos antes de confirmar."
+            return
+        }
         guard let dir = direcciones.first(where: { $0.id == seleccionadaId }) else {
             error = "Agrega o elige una dirección de entrega"
             return

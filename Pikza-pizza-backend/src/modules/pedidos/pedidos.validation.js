@@ -5,9 +5,12 @@ const agregadoItemSchema = z.object({
   agregadoId: z.number().int().positive(),
 });
 
+const MAX_CANTIDAD_POR_ITEM = 50;
+const MAX_ITEMS_POR_PEDIDO = 30;
+
 const itemSchema = z.object({
   productoVarianteId: z.number().int().positive(),
-  cantidad: z.number().int().positive(),
+  cantidad: z.number().int().positive().max(MAX_CANTIDAD_POR_ITEM, `Máximo ${MAX_CANTIDAD_POR_ITEM} unidades por producto`),
   notas: z.string().optional(),
   agregados: z.array(agregadoItemSchema).optional(),
 });
@@ -21,14 +24,18 @@ const crearPedidoSchema = z
     metodoPago: z.enum(["YAPE", "EFECTIVO", "TARJETA"]),
     // Efectivo: con cuánto va a pagar el cliente (para llevar el vuelto)
     pagaCon: z.number().positive().max(10000).optional(),
-    items: z.array(itemSchema).min(1, "El pedido debe tener al menos un producto"),
+    items: z.array(itemSchema)
+      .min(1, "El pedido debe tener al menos un producto")
+      .max(MAX_ITEMS_POR_PEDIDO, `Máximo ${MAX_ITEMS_POR_PEDIDO} productos distintos por pedido`),
   })
   .refine((data) => (data.canal === "DELIVERY" ? !!data.direccionId : true), {
     message: "Delivery requiere direccionId",
   });
 
 const agregarItemsSchema = z.object({
-  items: z.array(itemSchema).min(1, "Debe agregar al menos un producto a la comanda"),
+  items: z.array(itemSchema)
+    .min(1, "Debe agregar al menos un producto a la comanda")
+    .max(MAX_ITEMS_POR_PEDIDO, `Máximo ${MAX_ITEMS_POR_PEDIDO} productos distintos por operación`),
 });
 
 const confirmarPagoSchema = z.object({

@@ -150,8 +150,14 @@ private struct EditarNombreSheet: View {
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Guardar") {
+                    Button {
                         Task { await guardar() }
+                    } label: {
+                        if guardando {
+                            ProgressView()
+                        } else {
+                            Text("Guardar")
+                        }
                     }
                     .disabled(guardando)
                 }

@@ -47,7 +47,6 @@ enum AppColors {
     static let success = Color.adaptable(light: 0x2E7D3A, dark: 0x5FBF6E)
     static let warning = mostaza
     static let danger  = Color.adaptable(light: 0xC0392B, dark: 0xFF7A6B)
-    static let gold    = mostaza
 
     // --- Degradado de marca ---
     static let marcaDegradado = LinearGradient(colors: [cacao, cacaoOscuro],

@@ -16,7 +16,13 @@ final class SocketService {
         guard let token = KeychainStore.get("token") else { return nil }
 
         let m = SocketManager(socketURL: AppConfig.socketURL,
-                              config: [.forceWebsockets(true), .reconnects(true), .compress])
+                              config: [
+                                .forceWebsockets(true),
+                                .reconnects(true),
+                                .reconnectAttempts(10),
+                                .reconnectWait(2),
+                                .compress
+                              ])
         let s = m.defaultSocket
         s.connect(withPayload: ["token": token])
         manager = m

@@ -16,7 +16,9 @@ extension String {
 /// Equivalente a iconoCategoria() de tony_widgets.dart (SF Symbols).
 func iconoCategoria(_ nombre: String) -> String {
     let n = nombre.lowercased()
+    if n.contains("pizza") { return "circle.grid.3x3.fill" }
     if n.contains("bebida") { return "cup.and.saucer.fill" }
     if n.contains("postre") { return "birthday.cake.fill" }
+    if n.contains("entrada") { return "takeoutbag.and.cup.and.straw.fill" }
     return "fork.knife"
 }

@@ -14,7 +14,9 @@ enum KeychainStore {
         SecItemDelete(base(key) as CFDictionary)
         var q = base(key)
         q[kSecValueData as String] = Data(value.utf8)
-        q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        // ThisDeviceOnly: el token NUNCA sale del dispositivo (no viaja por iCloud Keychain).
+        // Recomendado por Apple para tokens de autenticación.
+        q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         SecItemAdd(q as CFDictionary, nil)
     }
 

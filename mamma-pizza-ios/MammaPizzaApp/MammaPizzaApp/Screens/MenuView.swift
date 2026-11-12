@@ -13,8 +13,12 @@ struct MenuView: View {
     }
 
     private func coincide(_ a: String, _ b: String) -> Bool {
-        let x = a.lowercased().trimmingCharacters(in: .whitespaces)
-        let y = b.lowercased().trimmingCharacters(in: .whitespaces)
+        // Normalizamos: ignoramos mayúsculas, minúsculas, tildes y espacios extra.
+        let x = a.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .trimmingCharacters(in: .whitespaces)
+        let y = b.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .trimmingCharacters(in: .whitespaces)
+        
         if x.isEmpty || y.isEmpty { return false }
         return x == y || x.hasPrefix(y) || y.hasPrefix(x)
     }
@@ -75,8 +79,10 @@ struct MenuView: View {
 
     private var lista: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 30) {
+            LazyVStack(alignment: .leading, spacing: 22) {
                 if consulta.isEmpty { encabezado }
+
+                chips
 
                 if secciones.isEmpty { vacio }
 
@@ -98,21 +104,17 @@ struct MenuView: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.top, 14)
+            .padding(.top, 6)
         }
         .contentMargins(.bottom, 80, for: .scrollContent)
         .scrollDismissesKeyboard(.interactively)
-        .safeAreaInset(edge: .top, spacing: 0) { chips }
         .refreshable { await menu.cargar() }
     }
 
     private var encabezado: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("NUESTRA CARTA")
-                .font(.caption.weight(.bold)).tracking(2)
-                .foregroundStyle(AppColors.primary)
+        VStack(alignment: .leading, spacing: 4) {
             Text("¿Qué se te antoja hoy?")
-                .font(.marca(.title))
+                .font(.marca(.title2))
                 .foregroundStyle(AppColors.texto)
             Text("Elige, personaliza y te lo llevamos calientito.")
                 .font(.subheadline)
@@ -185,9 +187,9 @@ struct MenuView: View {
                     .accessibilityAddTraits(activo ? .isSelected : [])
                 }
             }
-            .padding(.horizontal, 20).padding(.vertical, 8)
+            .padding(.horizontal, 20).padding(.vertical, 4)
         }
-        .background(.bar)
+        .padding(.horizontal, -20)
         .sensoryFeedback(.selection, trigger: nav.categoriaMenu)
     }
 }

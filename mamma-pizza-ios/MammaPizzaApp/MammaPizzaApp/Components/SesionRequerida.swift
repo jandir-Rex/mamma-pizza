@@ -10,15 +10,30 @@ struct SesionRequerida: ViewModifier {
 
     func body(content: Content) -> some View {
         if auth.usuario == nil {
-            ContentUnavailableView {
-                Label(titulo, systemImage: icono)
-            } description: {
+            VStack(spacing: 12) {
+                Image(systemName: icono)
+                    .font(.system(size: 30, weight: .medium))
+                    .foregroundStyle(AppColors.primary)
+                    .frame(width: 76, height: 76)
+                    .background(AppColors.kraftClaro, in: Circle())
+                    .padding(.bottom, 6)
+
+                Text(titulo)
+                    .font(.marca(.title2))
+                    .foregroundStyle(AppColors.texto)
+
                 Text(mensaje)
-            } actions: {
+                    .font(.subheadline)
+                    .foregroundStyle(AppColors.gris)
+                    .multilineTextAlignment(.center)
+
                 Button("Iniciar sesión") { nav.pedirLogin() }
                     .buttonStyle(.primario)
-                    .frame(maxWidth: 260)
+                    .frame(width: 260)
+                    .padding(.top, 14)
             }
+            .padding(.horizontal, 32)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .fondoApp()
         } else {
             content

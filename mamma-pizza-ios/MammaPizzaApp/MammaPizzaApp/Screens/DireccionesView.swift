@@ -5,12 +5,25 @@ struct DireccionesView: View {
     @State private var cargando = true
     @State private var mostrandoMapa = false
     @State private var porEliminar: Direccion?
-    @State private var error: String?
+    @State private var error: String?      // errores de eliminación (alerta)
+    @State private var errorCarga: String? // errores de carga (ContentUnavailableView)
 
     var body: some View {
         Group {
             if cargando && direcciones.isEmpty {
                 PizzaLoadingView(mensaje: "Cargando...").frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if direcciones.isEmpty && errorCarga != nil {
+                // Falla de red: el usuario no tiene direcciones en memoria porque la carga falló.
+                // Distinguimos este caso del "realmente no tiene direcciones".
+                ContentUnavailableView {
+                    Label("No pudimos cargar tus direcciones", systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text(errorCarga ?? "Revisa tu conexión e inténtalo de nuevo.")
+                } actions: {
+                    Button("Reintentar") { Task { await cargar() } }
+                        .buttonStyle(.borderedProminent)
+                    Button("Agregar dirección") { mostrandoMapa = true }
+                }
             } else if direcciones.isEmpty {
                 ContentUnavailableView {
                     Label("No tienes direcciones guardadas", systemImage: "mappin.slash")
@@ -70,7 +83,15 @@ struct DireccionesView: View {
     private func cargar() async {
         if direcciones.isEmpty { cargando = true }
         defer { cargando = false }
-        if let lista = try? await DireccionesService.listar() { direcciones = lista }
+        do {
+            let lista = try await DireccionesService.listar()
+            direcciones = lista
+            errorCarga = nil
+        } catch {
+            // No silenciar: si falla la red, el usuario debe saberlo.
+            // Mantenemos las direcciones que ya estaban para no perder contexto.
+            self.errorCarga = "No pudimos cargar tus direcciones. Revisa tu conexión."
+        }
     }
 
     private func eliminar(_ d: Direccion) async {
