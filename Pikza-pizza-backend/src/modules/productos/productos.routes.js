@@ -4,8 +4,21 @@ const verificarToken = require("../../middlewares/auth.middleware");
 const permitirRoles = require("../../middlewares/role.middleware");
 const { permitirPermisos } = permitirRoles;
 const { emitProductosCambiados } = require("../../sockets");
+const { recibirImagen } = require("./imagenes");
 
 const router = Router();
+
+// Subida de imagen desde archivo. Va ANTES del middleware de tiempo real a propósito:
+// subir un archivo no cambia la carta (solo devuelve la URL que luego se guarda con el
+// producto), así que no debe avisar a todos los paneles que recarguen.
+router.post(
+  "/imagen",
+  verificarToken,
+  permitirRoles("ADMIN", "PERSONALIZADO"),
+  permitirPermisos("productos:admin"),
+  recibirImagen,
+  productosController.subirImagen
+);
 
 // Tiempo real: cada cambio exitoso avisa a todos los paneles, enviando el producto ya actualizado
 router.use((req, res, next) => {

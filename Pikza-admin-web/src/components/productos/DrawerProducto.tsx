@@ -1,5 +1,5 @@
 // src/components/productos/DrawerProducto.tsx
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { apiRequest } from "@/services/api";
 
 type Categoria = {
@@ -30,6 +30,34 @@ type Props = {
   onGuardado: () => void;
 };
 
+// Debe coincidir con el límite del backend (imagenes.js)
+const TIPOS_IMAGEN = ["image/jpeg", "image/png", "image/webp"];
+const MAX_MB = 5;
+const MAX_BYTES = MAX_MB * 1024 * 1024;
+
+type ModoImagen = "ARCHIVO" | "URL";
+
+// Miniatura con respaldo si la URL no carga
+function VistaPreviaImagen({ url }: { url: string }) {
+  const [fallo, setFallo] = useState(false);
+
+  if (fallo) {
+    return (
+      <div className="flex size-14 shrink-0 items-center justify-center rounded-md bg-gray-100 px-1 text-center text-[10px] text-gray-400 dark:bg-gray-800">
+        Sin vista previa
+      </div>
+    );
+  }
+  return (
+    <img
+      src={url}
+      alt="Vista previa del producto"
+      onError={() => setFallo(true)}
+      className="size-14 shrink-0 rounded-md object-cover"
+    />
+  );
+}
+
 // Subcomponente interno del formulario que se reinicia limpiamente con 'key'
 function FormularioInterno({
   productoEnEdicion,
@@ -52,7 +80,14 @@ function FormularioInterno({
   const [subcategoriaId, setSubcategoriaId] = useState<number | "">(
     categoriaActual?.parentId ? categoriaActual.id : ""
   );
+  // Un solo valor para ambas formas de cargar la imagen (archivo o URL)
   const [imagenUrl, setImagenUrl] = useState(productoEnEdicion?.imagenUrl ?? "");
+  const [modoImagen, setModoImagen] = useState<ModoImagen>("ARCHIVO");
+  const [subiendoImagen, setSubiendoImagen] = useState(false);
+  const [errorImagen, setErrorImagen] = useState("");
+  const [arrastrando, setArrastrando] = useState(false);
+  const inputArchivoRef = useRef<HTMLInputElement>(null);
+
   const [variantes, setVariantes] = useState<VarianteForm[]>(() => {
     if (productoEnEdicion?.variantes?.length) {
       return productoEnEdicion.variantes.map((v) => ({
@@ -82,9 +117,52 @@ function FormularioInterno({
     });
   }
 
+  async function subirArchivo(archivo: File) {
+    setErrorImagen("");
+
+    if (!TIPOS_IMAGEN.includes(archivo.type)) {
+      setErrorImagen("Solo se permiten imágenes JPG, PNG o WEBP");
+      return;
+    }
+    if (archivo.size > MAX_BYTES) {
+      setErrorImagen(`La imagen no puede superar los ${MAX_MB} MB`);
+      return;
+    }
+
+    setSubiendoImagen(true);
+    try {
+      const formData = new FormData();
+      formData.append("imagen", archivo);
+      const { imagenUrl: urlSubida } = await apiRequest<{ imagenUrl: string }>("/productos/imagen", {
+        method: "POST",
+        body: formData,
+      });
+      setImagenUrl(urlSubida);
+    } catch (err) {
+      setErrorImagen(err instanceof Error ? err.message : "No se pudo subir la imagen");
+    } finally {
+      setSubiendoImagen(false);
+    }
+  }
+
+  function alElegirArchivo(e: React.ChangeEvent<HTMLInputElement>) {
+    const archivo = e.target.files?.[0];
+    e.target.value = ""; // permite volver a elegir el mismo archivo
+    if (archivo) void subirArchivo(archivo);
+  }
+
+  function alSoltarArchivo(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setArrastrando(false);
+    if (subiendoImagen) return;
+    const archivo = e.dataTransfer.files?.[0];
+    if (archivo) void subirArchivo(archivo);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!categoriaPadreId) return alert("Selecciona una categoría principal");
+    if (subiendoImagen) return alert("Espera a que termine de subirse la imagen");
 
     setGuardando(true);
     try {
@@ -98,7 +176,8 @@ function FormularioInterno({
         nombre: nombre.trim(),
         descripcion: descripcion.trim() || undefined,
         categoriaId: Number(subcategoriaId || categoriaPadreId),
-        imagenUrl: imagenUrl.trim() || undefined,
+        // Al editar, "null" quita la imagen; al crear, simplemente no se envía.
+        imagenUrl: imagenUrl.trim() || (productoEnEdicion ? null : undefined),
         variantes: payloadVariantes,
       };
 
@@ -184,17 +263,94 @@ function FormularioInterno({
             </select>
           </div>
 
+          {/* Imagen: subir archivo o usar URL */}
           <div className="col-span-2">
-            <label className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-              URL Imagen (Opcional)
-            </label>
-            <input
-              type="url"
-              placeholder="https://..."
-              value={imagenUrl}
-              onChange={(e) => setImagenUrl(e.target.value)}
-              className="mt-1.5 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
-            />
+            <div className="flex items-center justify-between gap-3">
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                Imagen (opcional)
+              </label>
+              <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5 dark:border-gray-700 dark:bg-gray-800">
+                {(["ARCHIVO", "URL"] as const).map((modo) => (
+                  <button
+                    key={modo}
+                    type="button"
+                    onClick={() => setModoImagen(modo)}
+                    className={`rounded-md px-2.5 py-1 text-xs font-bold transition ${
+                      modoImagen === modo
+                        ? "bg-brand-500 text-white shadow-xs"
+                        : "text-gray-600 hover:text-gray-900 dark:text-gray-300"
+                    }`}
+                  >
+                    {modo === "ARCHIVO" ? "Subir archivo" : "Usar URL"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {modoImagen === "ARCHIVO" ? (
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setArrastrando(true);
+                }}
+                onDragLeave={() => setArrastrando(false)}
+                onDrop={alSoltarArchivo}
+                className={`mt-1.5 flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed px-4 py-5 text-center transition ${
+                  arrastrando
+                    ? "border-brand-500 bg-brand-50 dark:bg-brand-950/20"
+                    : "border-gray-300 dark:border-gray-700"
+                }`}
+              >
+                <button
+                  type="button"
+                  disabled={subiendoImagen}
+                  onClick={() => inputArchivoRef.current?.click()}
+                  className="rounded-lg bg-brand-500 px-4 py-2 text-xs font-bold text-white hover:bg-brand-600 disabled:opacity-60"
+                >
+                  {subiendoImagen ? "Subiendo..." : imagenUrl ? "Cambiar imagen" : "Elegir archivo"}
+                </button>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  o arrastra una imagen aquí · JPG, PNG o WEBP · máx. {MAX_MB} MB
+                </p>
+                <input
+                  ref={inputArchivoRef}
+                  type="file"
+                  accept={TIPOS_IMAGEN.join(",")}
+                  onChange={alElegirArchivo}
+                  className="hidden"
+                  aria-label="Elegir imagen del producto"
+                />
+              </div>
+            ) : (
+              <input
+                type="url"
+                placeholder="https://..."
+                value={imagenUrl}
+                onChange={(e) => setImagenUrl(e.target.value)}
+                className="mt-1.5 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+              />
+            )}
+
+            {errorImagen && <p className="mt-1.5 text-xs font-medium text-red-500">{errorImagen}</p>}
+
+            {imagenUrl && (
+              <div className="mt-2 flex items-center gap-3 rounded-lg border border-gray-200 p-2 dark:border-gray-700">
+                <VistaPreviaImagen key={imagenUrl} url={imagenUrl} />
+                <p className="min-w-0 flex-1 truncate text-xs text-gray-500 dark:text-gray-400" title={imagenUrl}>
+                  {imagenUrl}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImagenUrl("");
+                    setErrorImagen("");
+                  }}
+                  className="text-xs font-semibold text-red-500 hover:underline"
+                >
+                  Quitar
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -275,7 +431,7 @@ function FormularioInterno({
         </button>
         <button
           type="submit"
-          disabled={guardando}
+          disabled={guardando || subiendoImagen}
           className="rounded-xl bg-brand-500 px-6 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-brand-600 disabled:opacity-50"
         >
           {guardando ? "Guardando..." : productoEnEdicion ? "Actualizar Cambios" : "Guardar Producto"}

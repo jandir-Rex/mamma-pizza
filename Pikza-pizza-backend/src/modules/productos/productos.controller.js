@@ -6,6 +6,7 @@ const {
   disponibilidadSchema,
 } = require("./productos.validation");
 const productosService = require("./productos.service");
+const imagenes = require("./imagenes");
 
 function manejarZodError(err, res, next) {
   if (err.name === "ZodError") {
@@ -105,6 +106,20 @@ async function actualizarDisponibilidadVariante(req, res, next) {
   }
 }
 
+// Recibe el archivo (ya leído por el middleware recibirImagen) y devuelve su URL pública.
+// El panel guarda esa URL en el campo imagenUrl del producto, igual que si la hubiera pegado.
+async function subirImagen(req, res, next) {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "Selecciona una imagen" });
+    }
+    const imagenUrl = await imagenes.guardarImagen(req.file.buffer, req);
+    res.status(201).json({ imagenUrl });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   crearCategoria,
   listarCategorias,
@@ -115,4 +130,5 @@ module.exports = {
   actualizarProducto,
   desactivarProducto,
   actualizarDisponibilidadVariante,
+  subirImagen,
 };
