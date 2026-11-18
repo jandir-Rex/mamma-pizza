@@ -10,7 +10,13 @@ export async function apiRequest<T>(
   const headers = new Headers(options.headers);
   const token = localStorage.getItem("token");
 
-  if (options.body && !headers.has("Content-Type")) {
+  // Con FormData (subida de archivos) NO se pone Content-Type:
+  // el navegador lo agrega solo, con el boundary correcto.
+  if (
+    options.body &&
+    !(options.body instanceof FormData) &&
+    !headers.has("Content-Type")
+  ) {
     headers.set("Content-Type", "application/json");
   }
   if (token) headers.set("Authorization", `Bearer ${token}`);
