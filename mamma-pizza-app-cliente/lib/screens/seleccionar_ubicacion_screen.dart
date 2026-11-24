@@ -19,18 +19,20 @@ class SeleccionarUbicacionScreen extends StatefulWidget {
 
 class _SeleccionarUbicacionScreenState extends State<SeleccionarUbicacionScreen> {
   static const LatLng _trujillo = LatLng(-8.1116, -79.0287);
+  static const String _msgFueraZona = 'Por ahora solo entregamos en Trujillo y alrededores.';
 
   final _mapCtrl = MapController();
   final _busquedaCtrl = TextEditingController();
   final _direccionCtrl = TextEditingController();
   final _refCtrl = TextEditingController();
 
-  Timer? _debounce;
-  LatLng _centro = _trujillo;
+  /// Punto elegido. Mientras sea null no se dibuja ningún pin.
+  /// El pin vive DENTRO del mapa (MarkerLayer), así que queda anclado a estas
+  /// coordenadas y no se mueve cuando navegas.
+  LatLng? _punto;
   List<LugarEncontrado> _resultados = [];
 
   bool _mapaListo = false;
-  bool _ubicacionElegida = false; // evita guardar el punto por defecto sin querer
   bool _buscando = false;
   bool _ubicando = false;
   bool _resolviendo = false;
@@ -40,7 +42,6 @@ class _SeleccionarUbicacionScreenState extends State<SeleccionarUbicacionScreen>
 
   @override
   void dispose() {
-    _debounce?.cancel();
     _mapCtrl.dispose();
     _busquedaCtrl.dispose();
     _direccionCtrl.dispose();
@@ -50,17 +51,20 @@ class _SeleccionarUbicacionScreenState extends State<SeleccionarUbicacionScreen>
 
   // ---------- Mapa ----------
 
-  void _alMoverMapa(MapCamera camera, bool porGesto) {
-    _centro = camera.center;
-    if (porGesto) {
-      _ubicacionElegida = true;
-      _debounce?.cancel();
-      _debounce = Timer(const Duration(milliseconds: 700), _resolverDireccion);
+  /// Coloca el pin en [punto] y rellena la dirección.
+  Future<void> _fijarPunto(LatLng punto) async {
+    if (!ZonaServicio.contiene(punto)) {
+      setState(() => _error = _msgFueraZona);
+      return;
     }
+    setState(() {
+      _punto = punto;
+      _error = null;
+    });
+    await _resolverDireccion(punto);
   }
 
-  Future<void> _resolverDireccion() async {
-    final punto = _centro;
+  Future<void> _resolverDireccion(LatLng punto) async {
     final id = ++_reqId;
     if (mounted) setState(() => _resolviendo = true);
     final texto = await GeocodingService.direccionDe(punto);
@@ -73,11 +77,11 @@ class _SeleccionarUbicacionScreenState extends State<SeleccionarUbicacionScreen>
 
   // ---------- GPS ----------
 
-  Future<void> _usarMiUbicacion({bool silencioso = false}) async {
+  Future<void> _usarMiUbicacion() async {
     if (!_mapaListo || _ubicando) return;
     setState(() {
       _ubicando = true;
-      if (!silencioso) _error = null;
+      _error = null;
     });
 
     try {
@@ -91,7 +95,7 @@ class _SeleccionarUbicacionScreenState extends State<SeleccionarUbicacionScreen>
       }
       if (permiso == LocationPermission.denied ||
           permiso == LocationPermission.deniedForever) {
-        throw Exception('Sin permiso de ubicación. Puedes buscar tu calle o mover el mapa.');
+        throw Exception('Sin permiso de ubicación. Puedes buscar tu calle o tocar el mapa.');
       }
 
       final pos = await Geolocator.getCurrentPosition(
@@ -102,13 +106,17 @@ class _SeleccionarUbicacionScreenState extends State<SeleccionarUbicacionScreen>
       );
       if (!mounted) return;
 
+      debugPrint('GPS: ${pos.latitude}, ${pos.longitude} (±${pos.accuracy} m)');
+
       final punto = LatLng(pos.latitude, pos.longitude);
+      if (!ZonaServicio.contiene(punto)) {
+        throw Exception(_msgFueraZona);
+      }
+
       _mapCtrl.move(punto, 17.5);
-      _centro = punto;
-      _ubicacionElegida = true;
-      await _resolverDireccion();
+      await _fijarPunto(punto);
     } catch (e) {
-      if (!mounted || silencioso) return;
+      if (!mounted) return;
       setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _ubicando = false);
@@ -132,7 +140,7 @@ class _SeleccionarUbicacionScreenState extends State<SeleccionarUbicacionScreen>
       setState(() {
         _resultados = r;
         if (r.isEmpty) {
-          _error = 'No encontramos esa dirección. Prueba con otra o mueve el mapa.';
+          _error = 'No encontramos esa dirección en Trujillo. Prueba con otra o toca el mapa.';
         }
       });
     } catch (e) {
@@ -145,11 +153,17 @@ class _SeleccionarUbicacionScreenState extends State<SeleccionarUbicacionScreen>
   }
 
   void _elegirResultado(LugarEncontrado lugar) {
+    if (!ZonaServicio.contiene(lugar.punto)) {
+      setState(() => _error = _msgFueraZona);
+      return;
+    }
     _mapCtrl.move(lugar.punto, 17.5);
+    ++_reqId; // cancela cualquier reverse geocoding pendiente
     setState(() {
-      _centro = lugar.punto;
-      _ubicacionElegida = true;
+      _punto = lugar.punto;
       _resultados = [];
+      _error = null;
+      _resolviendo = false;
       _busquedaCtrl.text = lugar.titulo;
       _direccionCtrl.text = lugar.titulo;
     });
@@ -159,9 +173,14 @@ class _SeleccionarUbicacionScreenState extends State<SeleccionarUbicacionScreen>
 
   Future<void> _confirmar() async {
     final texto = _direccionCtrl.text.trim();
+    final punto = _punto;
 
-    if (!_ubicacionElegida) {
-      setState(() => _error = 'Usa tu ubicación, busca tu calle o mueve el mapa hasta tu puerta.');
+    if (punto == null) {
+      setState(() => _error = 'Usa tu ubicación, busca tu calle o toca el mapa donde está tu puerta.');
+      return;
+    }
+    if (!ZonaServicio.contiene(punto)) {
+      setState(() => _error = _msgFueraZona);
       return;
     }
     if (texto.isEmpty) {
@@ -178,8 +197,8 @@ class _SeleccionarUbicacionScreenState extends State<SeleccionarUbicacionScreen>
       final nueva = await DireccionesService.crear(
         zona: texto,
         referencia: _refCtrl.text.trim(),
-        lat: _centro.latitude,
-        lng: _centro.longitude,
+        lat: punto.latitude,
+        lng: punto.longitude,
       );
       if (!mounted) return;
       Navigator.of(context).pop(nueva);
@@ -218,22 +237,45 @@ class _SeleccionarUbicacionScreenState extends State<SeleccionarUbicacionScreen>
                   options: MapOptions(
                     initialCenter: _trujillo,
                     initialZoom: 15,
-                    minZoom: 5,
+                    minZoom: 11,
                     maxZoom: 19,
+                    // El usuario no puede alejarse de la zona de servicio
+                    cameraConstraint: CameraConstraint.contain(
+                      bounds: LatLngBounds(
+                        ZonaServicio.suroeste,
+                        ZonaServicio.noreste,
+                      ),
+                    ),
                     interactionOptions: const InteractionOptions(
                       flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                     ),
-                    onMapReady: () {
-                      _mapaListo = true;
-                      _usarMiUbicacion(silencioso: true);
-                    },
-                    onPositionChanged: (camera, porGesto) => _alMoverMapa(camera, porGesto),
+                    onMapReady: () => _mapaListo = true,
+                    // Tocar el mapa también coloca el pin
+                    onTap: (_, punto) => _fijarPunto(punto),
                   ),
                   children: [
                     TileLayer(
                       urlTemplate: MapboxConfig.urlTiles,
                       userAgentPackageName: 'com.example.mamma_pizza_app_cliente',
                     ),
+                    // Pin anclado a coordenadas reales: se queda quieto al navegar
+                    if (_punto != null)
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: _punto!,
+                            width: 48,
+                            height: 48,
+                            // la punta del pin queda justo sobre el punto
+                            alignment: Alignment.topCenter,
+                            child: const Icon(
+                              Icons.location_on,
+                              size: 48,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
+                      ),
                     const RichAttributionWidget(
                       attributions: [
                         TextSourceAttribution('© Mapbox'),
@@ -241,16 +283,6 @@ class _SeleccionarUbicacionScreenState extends State<SeleccionarUbicacionScreen>
                       ],
                     ),
                   ],
-                ),
-
-                // Pin fijo al centro (la punta queda justo sobre el punto elegido)
-                const IgnorePointer(
-                  child: Center(
-                    child: Padding(
-                      padding: EdgeInsets.only(bottom: 44),
-                      child: Icon(Icons.location_on, size: 48, color: AppColors.primary),
-                    ),
-                  ),
                 ),
 
                 // Buscador + resultados
@@ -339,7 +371,7 @@ class _SeleccionarUbicacionScreenState extends State<SeleccionarUbicacionScreen>
                   child: FloatingActionButton.small(
                     heroTag: 'mi_ubicacion',
                     backgroundColor: Colors.white,
-                    onPressed: _ubicando ? null : () => _usarMiUbicacion(),
+                    onPressed: _ubicando ? null : _usarMiUbicacion,
                     child: _ubicando
                         ? const SizedBox(
                             width: 18,

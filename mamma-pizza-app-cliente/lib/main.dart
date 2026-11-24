@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'core/theme.dart';
 import 'providers/auth_provider.dart';
 import 'providers/carrito_provider.dart';
-import 'screens/login_screen.dart';
 import 'screens/main_shell.dart';
 
 void main() {
@@ -39,6 +38,7 @@ class _Arrancador extends StatelessWidget {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
 
+    // Espera a restaurar la sesión guardada (si la hay) y entra siempre al home.
     if (auth.cargando) {
       return const Scaffold(
         backgroundColor: AppColors.bg,
@@ -46,6 +46,6 @@ class _Arrancador extends StatelessWidget {
       );
     }
 
-    return auth.usuario != null ? const MainShell() : const LoginScreen();
+    return const MainShell();
   }
 }

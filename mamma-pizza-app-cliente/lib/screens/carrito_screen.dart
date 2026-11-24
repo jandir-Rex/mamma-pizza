@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../core/page_transitions.dart';
+import '../core/requerir_sesion.dart';
 import '../models/item_carrito.dart';
+import '../providers/auth_provider.dart';
 import '../providers/carrito_provider.dart';
 import '../widgets/tony_widgets.dart'; // PizzaPlaceholder + iconoCategoria
 import '../widgets/ui_comunes.dart';
@@ -10,6 +12,13 @@ import 'checkout_screen.dart';
 
 class CarritoScreen extends StatelessWidget {
   const CarritoScreen({super.key});
+
+  Future<void> _continuar(BuildContext context) async {
+    final nav = Navigator.of(context);
+    final auth = context.read<AuthProvider>();
+    if (!await requerirSesion(nav, auth)) return;
+    nav.push(deslizarDesdeDerecha(const CheckoutScreen()));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -89,9 +98,7 @@ class CarritoScreen extends StatelessWidget {
                         BotonPrincipal(
                           texto: "Continuar",
                           icono: Icons.arrow_forward_rounded,
-                          onPressed: () {
-                            Navigator.of(context).push(deslizarDesdeDerecha(const CheckoutScreen()));
-                          },
+                          onPressed: () => _continuar(context),
                         ),
                       ],
                     ),

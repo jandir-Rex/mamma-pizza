@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../core/requerir_sesion.dart';
 import '../core/theme.dart';
+import '../providers/auth_provider.dart';
 import '../widgets/barra_carrito.dart';
 import '../widgets/presionable.dart';
+import '../widgets/ui_comunes.dart';
 import 'home_screen.dart';
 import 'menu_screen.dart';
 import 'pedidos_historial_screen.dart';
@@ -38,8 +42,18 @@ class _MainShellState extends State<MainShell> {
   late final List<Widget> _pantallas = [
     HomeScreen(onVerMenu: _irAMenu),
     MenuScreen(categoria: _categoria, onVolver: _irAInicio),
-    const PedidosHistorialScreen(),
-    const PerfilScreen(),
+    _SoloConSesion(
+      emoji: "🧾",
+      titulo: "Tus pedidos",
+      mensaje: "Inicia sesión para ver tu historial y seguir tus pedidos.",
+      builder: (_) => const PedidosHistorialScreen(),
+    ),
+    _SoloConSesion(
+      emoji: "👤",
+      titulo: "Tu perfil",
+      mensaje: "Inicia sesión para ver y editar tu perfil.",
+      builder: (_) => const PerfilScreen(),
+    ),
   ];
 
   static const _items = [
@@ -138,6 +152,39 @@ class _MainShellState extends State<MainShell> {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Muestra la pantalla real solo si hay sesión; si no, invita a iniciar sesión.
+class _SoloConSesion extends StatelessWidget {
+  final String emoji;
+  final String titulo;
+  final String mensaje;
+  final WidgetBuilder builder;
+
+  const _SoloConSesion({
+    required this.emoji,
+    required this.titulo,
+    required this.mensaje,
+    required this.builder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    if (auth.usuario != null) return builder(context);
+
+    return Scaffold(
+      body: SafeArea(
+        child: EstadoVacio(
+          emoji: emoji,
+          titulo: titulo,
+          mensaje: mensaje,
+          textoAccion: "Iniciar sesión",
+          onAccion: () => requerirSesion(Navigator.of(context), auth),
         ),
       ),
     );

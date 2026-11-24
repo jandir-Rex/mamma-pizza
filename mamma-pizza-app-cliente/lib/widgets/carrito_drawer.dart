@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../core/page_transitions.dart';
+import '../core/requerir_sesion.dart';
+import '../providers/auth_provider.dart';
 import '../providers/carrito_provider.dart';
 import '../screens/checkout_screen.dart';
 import 'tony_widgets.dart'; // PizzaPlaceholder + iconoCategoria
@@ -71,11 +73,14 @@ class _CarritoBottomSheetState extends State<_CarritoBottomSheet> {
     }
   }
 
-  void _continuarAlPago() {
+  Future<void> _continuarAlPago() async {
     if (_navegando) return;
     _navegando = true;
     final nav = Navigator.of(context);
+    final auth = context.read<AuthProvider>();
     nav.pop();
+    // Si no hay sesión, abre el login; al volver sigue al checkout con el carrito intacto.
+    if (!await requerirSesion(nav, auth)) return;
     nav.push(deslizarDesdeDerecha(const CheckoutScreen()));
   }
 

@@ -3,7 +3,7 @@ import Foundation
 enum AppConfig {
     // URL pública de InstaBox (apunta al puerto 4000 de tu Mac).
     // Para desarrollo local, puedes cambiar esto a "http://localhost:4000".
-    static let host = "https://4000-agqyupg2egluipq35eyr4qw4aa.instabox.tech"
+    static let host = "https://mamma-pizza-backend.onrender.com"
     static var apiBaseURL: String { host + "/api" }
     static var socketURL: URL { URL(string: host)! }
 

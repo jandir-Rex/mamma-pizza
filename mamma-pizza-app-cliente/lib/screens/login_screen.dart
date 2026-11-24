@@ -6,8 +6,9 @@ import '../core/page_transitions.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/ui_comunes.dart';
 import 'registro_screen.dart';
-import 'main_shell.dart';
 
+/// Se abre encima de la pantalla actual (ver requerirSesion).
+/// Devuelve true por Navigator.pop cuando el usuario inicia sesión o se registra.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -43,10 +44,7 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       await context.read<AuthProvider>().login(_emailCtrl.text.trim(), _passwordCtrl.text);
       if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        desvanecer(const MainShell()),
-        (route) => false,
-      );
+      Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
       HapticFeedback.heavyImpact();
@@ -54,6 +52,12 @@ class _LoginScreenState extends State<LoginScreen> {
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
+  }
+
+  Future<void> _irARegistro() async {
+    final ok = await Navigator.of(context)
+        .push<bool>(deslizarDesdeDerecha(const RegistroScreen()));
+    if (ok == true && mounted) Navigator.of(context).pop(true);
   }
 
   @override
@@ -66,7 +70,22 @@ class _LoginScreenState extends State<LoginScreen> {
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           child: Column(
             children: [
-              const _CabeceraMarca(),
+              Stack(
+                children: [
+                  const _CabeceraMarca(),
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    child: SafeArea(
+                      child: IconButton(
+                        tooltip: "Cerrar",
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        onPressed: () => Navigator.of(context).maybePop(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
                 child: Aparecer(
@@ -80,7 +99,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           Text("Bienvenido de vuelta", style: AppFonts.titulo(size: 30)),
                           const SizedBox(height: 4),
                           Text(
-                            "Ingresa para pedir tu pizza favorita",
+                            "Inicia sesión para confirmar tu pedido",
                             style: AppFonts.cuerpo(size: 14, color: AppColors.gray),
                           ),
                           const SizedBox(height: 24),
@@ -141,10 +160,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 style: AppFonts.cuerpo(size: 13, color: AppColors.gray),
                               ),
                               TextButton(
-                                onPressed: _cargando
-                                    ? null
-                                    : () => Navigator.of(context)
-                                        .push(deslizarDesdeDerecha(const RegistroScreen())),
+                                onPressed: _cargando ? null : _irARegistro,
                                 child: const Text("Regístrate"),
                               ),
                             ],

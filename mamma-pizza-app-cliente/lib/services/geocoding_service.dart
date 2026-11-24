@@ -14,6 +14,27 @@ class LugarEncontrado {
   });
 }
 
+/// Zona donde se entrega: Trujillo, Víctor Larco, La Esperanza, El Porvenir,
+/// Huanchaco, Moche y Laredo. Cambia los números aquí y se actualiza todo.
+class ZonaServicio {
+  static const double minLat = -8.25;
+  static const double maxLat = -8.00;
+  static const double minLng = -79.20;
+  static const double maxLng = -78.80;
+
+  static const LatLng suroeste = LatLng(minLat, minLng);
+  static const LatLng noreste = LatLng(maxLat, maxLng);
+
+  /// Formato Mapbox: minLng,minLat,maxLng,maxLat
+  static const String bbox = '$minLng,$minLat,$maxLng,$maxLat';
+
+  static bool contiene(LatLng p) =>
+      p.latitude >= minLat &&
+      p.latitude <= maxLat &&
+      p.longitude >= minLng &&
+      p.longitude <= maxLng;
+}
+
 /// Configuración de Mapbox.
 /// Prioridad del token: --dart-define=MAPBOX_TOKEN=pk... y, si no hay, secrets.dart.
 class MapboxConfig {
@@ -44,7 +65,7 @@ class GeocodingService {
     }
   }
 
-  /// Busca direcciones en Perú, priorizando Trujillo.
+  /// Busca direcciones dentro de la zona de servicio, priorizando Trujillo.
   static Future<List<LugarEncontrado>> buscar(String consulta) async {
     _validarToken();
 
@@ -54,6 +75,7 @@ class GeocodingService {
       'language': 'es',
       'limit': '6',
       'proximity': _cercaDeTrujillo,
+      'bbox': ZonaServicio.bbox, // descarta resultados fuera de la zona
       if (MapboxConfig.permanente) 'permanent': 'true',
       'access_token': MapboxConfig.token,
     });
@@ -75,30 +97,36 @@ class GeocodingService {
   }
 
   /// Convierte coordenadas en una dirección legible. Devuelve null si falla.
+  /// Prueba del tipo más preciso (dirección con número) al más general.
   static Future<String?> direccionDe(LatLng punto) async {
     if (!MapboxConfig.configurado) return null;
-    try {
-      final uri = Uri.https(_host, '/search/geocode/v6/reverse', {
-        'longitude': punto.longitude.toString(),
-        'latitude': punto.latitude.toString(),
-        'language': 'es',
-        'types': 'address,street,neighborhood,locality',
-        'limit': '1',
-        if (MapboxConfig.permanente) 'permanent': 'true',
-        'access_token': MapboxConfig.token,
-      });
 
-      final resp = await http.get(uri).timeout(_timeout);
-      if (resp.statusCode != 200) return null;
+    for (final tipo in const ['address', 'street', 'neighborhood', 'locality']) {
+      try {
+        final uri = Uri.https(_host, '/search/geocode/v6/reverse', {
+          'longitude': punto.longitude.toString(),
+          'latitude': punto.latitude.toString(),
+          'language': 'es',
+          'types': tipo,
+          'limit': '1',
+          if (MapboxConfig.permanente) 'permanent': 'true',
+          'access_token': MapboxConfig.token,
+        });
 
-      final json = jsonDecode(resp.body) as Map<String, dynamic>;
-      final features = (json['features'] as List?) ?? [];
-      if (features.isEmpty) return null;
+        final resp = await http.get(uri).timeout(_timeout);
+        if (resp.statusCode != 200) continue;
 
-      return _aLugar(features.first as Map<String, dynamic>)?.titulo;
-    } catch (_) {
-      return null;
+        final json = jsonDecode(resp.body) as Map<String, dynamic>;
+        final features = (json['features'] as List?) ?? [];
+        if (features.isEmpty) continue;
+
+        final lugar = _aLugar(features.first as Map<String, dynamic>);
+        if (lugar != null) return lugar.titulo;
+      } catch (_) {
+        continue;
+      }
     }
+    return null;
   }
 
   /// Mapbox entrega coordenadas como [lng, lat]: ojo con el orden.
