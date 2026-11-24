@@ -45,6 +45,24 @@ function UsersIcon(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
+// Icono SVG para Pagos (billetera)
+function WalletIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5" />
+      <path d="M16 13h2" />
+    </svg>
+  );
+}
+
 export default function ControlSidebar() {
   const { usuario, tienePermiso } = useAuth();
   const {
@@ -79,6 +97,9 @@ export default function ControlSidebar() {
   }
   if (tienePermiso("productos:admin")) {
     items.push({ nombre: "Carta & Menú", ruta: "/admin/productos", Icono: MenuIcon });
+  }
+  if (tienePermiso("pagos:admin")) {
+    items.push({ nombre: "Pagos", ruta: "/admin/pagos", Icono: WalletIcon });
   }
   if (tienePermiso("usuarios:admin")) {
     items.push({ nombre: "Usuarios", ruta: "/admin/usuarios", Icono: UsersIcon });

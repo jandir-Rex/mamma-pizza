@@ -12,6 +12,7 @@ import HistorialPedidos from "./pages/Administracion/HistorialPedidos";
 import RegistroPedidos from "./pages/Administracion/RegistroPedidos";
 import ProductosAdmin from "./pages/Administracion/ProductosAdmin";
 import GestionUsuarios from "./pages/Administracion/GestionUsuarios";
+import ConfigPagos from "./pages/Administracion/ConfigPagos";
 import UserProfiles from "./pages/UserProfiles";
 
 
@@ -28,6 +29,7 @@ function RedireccionInicial() {
   }
   if (tienePermiso("productos:admin")) return <Navigate to="/admin/productos" replace />;
   if (tienePermiso("usuarios:admin")) return <Navigate to="/admin/usuarios" replace />;
+  if (tienePermiso("pagos:admin")) return <Navigate to="/admin/pagos" replace />;
 
   return <Navigate to="/sin-acceso" replace />;
 }
@@ -70,6 +72,10 @@ export default function App() {
 
             <Route element={<ProtectedRoute permiso="usuarios:admin" />}>
               <Route path="/admin/usuarios" element={<GestionUsuarios />} />
+            </Route>
+
+            <Route element={<ProtectedRoute permiso="pagos:admin" />}>
+              <Route path="/admin/pagos" element={<ConfigPagos />} />
             </Route>
 
             {/* El permiso, no un nombre de rol, determina el acceso al módulo. */}

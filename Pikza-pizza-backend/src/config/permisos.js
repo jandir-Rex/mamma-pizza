@@ -5,7 +5,7 @@ const PERMISOS = {
   PEDIDOS_CREAR: "pedidos:crear",
   PEDIDOS_COBRAR: "pedidos:cobrar",
   PEDIDOS_ESTADO: "pedidos:estado",
-  
+
   // Módulo Mesas
   MESAS_VER: "mesas:ver",
   MESAS_ADMIN: "mesas:admin",
@@ -18,6 +18,9 @@ const PERMISOS = {
 
   // Módulo Usuarios / Staff
   USUARIOS_ADMIN: "usuarios:admin",
+
+  // Módulo Pagos (número de Yape y QR que ve el cliente)
+  PAGOS_ADMIN: "pagos:admin",
 };
 
 const PERMISOS_PERSONALIZADOS = new Set(

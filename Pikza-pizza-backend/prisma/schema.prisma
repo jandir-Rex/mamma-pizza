@@ -335,3 +335,30 @@ model ForecastRun {
   @@index([createdAt])
   @@map("forecast_runs")
 }
+
+// ------------------- CONFIGURACIÓN DE PAGOS -------------------
+// Una sola fila (id = 1): a dónde yapean los clientes. El admin la cambia desde el panel web.
+// Si está vacía se usan YAPE_NUMERO / YAPE_TITULAR del .env.
+model ConfigPago {
+  id              Int       @id @default(1)
+  yapeNumero      String?
+  yapeTitular     String?
+  qrMime          String?
+  qrActualizadoEn DateTime?
+  updatedAt       DateTime  @updatedAt
+
+  qr ConfigPagoQr?
+
+  @@map("config_pago")
+}
+
+// Imagen del QR (aparte para no cargarla cada vez que se lee el número)
+model ConfigPagoQr {
+  id       Int        @id @default(autoincrement())
+  configId Int        @unique
+  config   ConfigPago @relation(fields: [configId], references: [id], onDelete: Cascade)
+  mime     String
+  datos    Bytes
+
+  @@map("config_pago_qr")
+}

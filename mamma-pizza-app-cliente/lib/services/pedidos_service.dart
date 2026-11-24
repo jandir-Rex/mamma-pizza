@@ -5,10 +5,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/api_client.dart';
 import '../models/pedido.dart';
 
+/// A dónde debe yapear el cliente. Lo define el administrador desde el panel web.
 class ConfigPago {
   final String? yapeNumero;
   final String? yapeTitular;
-  ConfigPago({this.yapeNumero, this.yapeTitular});
+
+  /// URL de la imagen del QR (null si el administrador aún no subió uno)
+  final String? yapeQrUrl;
+
+  ConfigPago({this.yapeNumero, this.yapeTitular, this.yapeQrUrl});
+
+  bool get tieneQr => yapeQrUrl != null && yapeQrUrl!.isNotEmpty;
 }
 
 class PedidosService {
@@ -46,6 +53,7 @@ class PedidosService {
     return ConfigPago(
       yapeNumero: data["yapeNumero"]?.toString(),
       yapeTitular: data["yapeTitular"]?.toString(),
+      yapeQrUrl: data["yapeQrUrl"]?.toString(),
     );
   }
 
