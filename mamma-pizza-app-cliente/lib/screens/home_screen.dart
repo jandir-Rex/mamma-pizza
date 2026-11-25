@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -19,19 +20,51 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+  static const _intervaloRefresco = Duration(minutes: 1);
+
   List<Producto> _productos = [];
   List<Agregado> _agregados = [];
   bool _cargando = true;
   bool _error = false;
+  bool _solicitudEnCurso = false;
+  Timer? _timerRefresco;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _cargar();
+    _actualizarTimer();
+  }
+
+  void _actualizarTimer() {
+    _timerRefresco?.cancel();
+    _timerRefresco = null;
+    if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+      return;
+    }
+    _timerRefresco = Timer.periodic(_intervaloRefresco, (_) => _cargar(silencioso: true));
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _cargar(silencioso: true);
+    }
+    _actualizarTimer();
+  }
+
+  @override
+  void dispose() {
+    _timerRefresco?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   Future<void> _cargar({bool silencioso = false}) async {
+    if (_solicitudEnCurso) return;
+    _solicitudEnCurso = true;
     if (!silencioso && mounted) {
       setState(() {
         _cargando = true;
@@ -57,6 +90,8 @@ class _HomeScreenState extends State<HomeScreen> {
         _cargando = false;
         _error = _productos.isEmpty;
       });
+    } finally {
+      _solicitudEnCurso = false;
     }
   }
 

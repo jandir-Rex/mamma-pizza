@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../core/theme.dart';
 import '../models/producto.dart';
@@ -17,26 +18,51 @@ class MenuScreen extends StatefulWidget {
   State<MenuScreen> createState() => _MenuScreenState();
 }
 
-class _MenuScreenState extends State<MenuScreen> {
+class _MenuScreenState extends State<MenuScreen> with WidgetsBindingObserver {
+  static const _intervaloRefresco = Duration(minutes: 1);
+
   List<Producto> _productos = [];
   List<Agregado> _agregados = [];
   bool _cargando = true;
   String? _error;
   String _sel = "Todas";
   bool _buscando = false;
+  bool _solicitudEnCurso = false;
   String _consulta = "";
   final _buscadorCtrl = TextEditingController();
+  Timer? _timerRefresco;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _sel = widget.categoria?.value ?? "Todas";
     widget.categoria?.addListener(_alCambiarCategoria);
     _cargarMenu();
+    _actualizarTimer();
+  }
+
+  void _actualizarTimer() {
+    _timerRefresco?.cancel();
+    _timerRefresco = null;
+    if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+      return;
+    }
+    _timerRefresco = Timer.periodic(_intervaloRefresco, (_) => _cargarMenu(silencioso: true));
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _cargarMenu(silencioso: true);
+    }
+    _actualizarTimer();
   }
 
   @override
   void dispose() {
+    _timerRefresco?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     widget.categoria?.removeListener(_alCambiarCategoria);
     _buscadorCtrl.dispose();
     super.dispose();
@@ -48,7 +74,8 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   Future<void> _cargarMenu({bool silencioso = false}) async {
-    if (!mounted) return;
+    if (!mounted || _solicitudEnCurso) return;
+    _solicitudEnCurso = true;
     if (!silencioso) {
       setState(() {
         _cargando = true;
@@ -68,12 +95,13 @@ class _MenuScreenState extends State<MenuScreen> {
       if (!mounted) return;
       if (_productos.isEmpty) {
         setState(() => _error = "No se pudo cargar el menú");
-      } else {
+      } else if (!silencioso) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("No se pudo actualizar el menú")),
         );
       }
     } finally {
+      _solicitudEnCurso = false;
       if (mounted) setState(() => _cargando = false);
     }
   }

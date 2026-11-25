@@ -1,7 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../core/api_client.dart';
 import '../core/theme.dart';
 import '../core/utils.dart';
 import '../models/entrega.dart';
+import '../providers/auth_provider.dart';
 import '../services/pedidos_service.dart';
 import '../widgets/pizza_loading.dart';
 
@@ -12,8 +16,9 @@ class HistorialScreen extends StatefulWidget {
   State<HistorialScreen> createState() => _HistorialScreenState();
 }
 
-class _HistorialScreenState extends State<HistorialScreen> {
+class _HistorialScreenState extends State<HistorialScreen> with WidgetsBindingObserver {
   static const _diasSemana = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"];
+  static const _intervaloRefresco = Duration(seconds: 30);
 
   late final List<DateTime> _dias = List.generate(7, (i) {
     final hoy = DateTime.now();
@@ -23,27 +28,78 @@ class _HistorialScreenState extends State<HistorialScreen> {
 
   List<Entrega> _lista = [];
   bool _cargando = true;
+  bool _solicitudEnCurso = false;
+  bool _recargaPendiente = false;
   String? _error;
+  Timer? _timerRefresco;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _cargar();
+    _actualizarTimer();
   }
 
-  Future<void> _cargar() async {
-    setState(() {
-      _cargando = true;
-      _error = null;
-    });
+  void _actualizarTimer() {
+    _timerRefresco?.cancel();
+    _timerRefresco = null;
+    if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+      return;
+    }
+    _timerRefresco = Timer.periodic(_intervaloRefresco, (_) => _cargar(silencioso: true));
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _cargar(silencioso: true);
+    }
+    _actualizarTimer();
+  }
+
+  @override
+  void dispose() {
+    _timerRefresco?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  Future<void> _cargar({bool silencioso = false}) async {
+    if (_solicitudEnCurso) {
+      _recargaPendiente = true;
+      return;
+    }
+    _solicitudEnCurso = true;
+    final diaConsultado = _dia;
+    if (!silencioso) {
+      setState(() {
+        _cargando = true;
+        _error = null;
+      });
+    }
     try {
-      final datos = await PedidosService.historial(_dia);
-      if (!mounted) return;
-      setState(() => _lista = datos);
+      final datos = await PedidosService.historial(diaConsultado);
+      if (!mounted || diaConsultado != _dia) return;
+      setState(() {
+        _lista = datos;
+        _error = null;
+      });
     } catch (e) {
-      if (mounted) setState(() => _error = mensajeError(e));
+      if (e is ApiException && e.status == 401) {
+        if (mounted) await context.read<AuthProvider>().logout();
+        return;
+      }
+      if (mounted && diaConsultado == _dia && (!silencioso || _lista.isEmpty)) {
+        setState(() => _error = mensajeError(e));
+      }
     } finally {
-      if (mounted) setState(() => _cargando = false);
+      _solicitudEnCurso = false;
+      if (mounted && !silencioso) setState(() => _cargando = false);
+      if (_recargaPendiente && mounted) {
+        _recargaPendiente = false;
+        unawaited(_cargar(silencioso: true));
+      }
     }
   }
 
@@ -82,7 +138,7 @@ class _HistorialScreenState extends State<HistorialScreen> {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 20),
               itemCount: _dias.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (_, i) {
                 final activo = _dias[i] == _dia;
                 return GestureDetector(
@@ -143,7 +199,9 @@ class _HistorialScreenState extends State<HistorialScreen> {
   Widget _separador() => Container(width: 1, height: 34, color: Colors.white24);
 
   Widget _contenido() {
-    if (_cargando) return const Center(child: PizzaLoading(mensaje: "Cargando historial..."));
+    if (_cargando) {
+      return const Center(child: PizzaLoading(mensaje: "Cargando historial..."));
+    }
     if (_error != null) {
       return Center(
         child: Column(
@@ -173,7 +231,7 @@ class _HistorialScreenState extends State<HistorialScreen> {
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
         itemCount: _lista.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (_, i) => _FilaHistorial(entrega: _lista[i]),
       ),
     );

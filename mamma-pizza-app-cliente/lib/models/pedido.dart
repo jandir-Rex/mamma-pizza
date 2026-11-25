@@ -5,10 +5,19 @@ class ItemPedido {
   ItemPedido({required this.cantidad, required this.precioUnitario, this.nombre = "Producto"});
 
   static String _nombre(Map<String, dynamic> j) {
-    final p = j["producto"] ?? (j["variante"] is Map ? j["variante"]["producto"] : null);
-    final base = (j["nombre"] ?? j["nombreProducto"] ?? (p is Map ? p["nombre"] : null) ?? "Producto").toString();
-    final v = j["variante"];
-    final t = (v is Map ? v["tamano"] : null) ?? j["tamano"];
+    final productoVariante = j["productoVariante"];
+    final variante = j["variante"];
+    final producto = j["producto"] ??
+        (productoVariante is Map ? productoVariante["producto"] : null) ??
+        (variante is Map ? variante["producto"] : null);
+    final base = (j["nombre"] ??
+            j["nombreProducto"] ??
+            (producto is Map ? producto["nombre"] : null) ??
+            "Producto")
+        .toString();
+    final t = (productoVariante is Map ? productoVariante["tamano"] : null) ??
+        (variante is Map ? variante["tamano"] : null) ??
+        j["tamano"];
     return t == null ? base : "$base ($t)";
   }
 

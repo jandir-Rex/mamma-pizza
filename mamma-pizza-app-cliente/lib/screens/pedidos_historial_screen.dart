@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/theme.dart';
@@ -17,18 +18,57 @@ class PedidosHistorialScreen extends StatefulWidget {
   State<PedidosHistorialScreen> createState() => _PedidosHistorialScreenState();
 }
 
-class _PedidosHistorialScreenState extends State<PedidosHistorialScreen> {
+class _PedidosHistorialScreenState extends State<PedidosHistorialScreen> with WidgetsBindingObserver {
+  static const _intervaloRefresco = Duration(seconds: 30);
+
   List<Pedido> _pedidos = [];
   bool _cargando = true;
   String? _error;
+  bool _solicitudEnCurso = false;
+  bool _recargaPendiente = false;
+  Timer? _timerRefresco;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _cargarPedidos();
+    _actualizarTimer();
+  }
+
+  void _actualizarTimer() {
+    _timerRefresco?.cancel();
+    _timerRefresco = null;
+    if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+      return;
+    }
+    _timerRefresco = Timer.periodic(
+      _intervaloRefresco,
+      (_) => _cargarPedidos(silencioso: true),
+    );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _cargarPedidos(silencioso: true);
+    }
+    _actualizarTimer();
+  }
+
+  @override
+  void dispose() {
+    _timerRefresco?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   Future<void> _cargarPedidos({bool silencioso = false}) async {
+    if (_solicitudEnCurso) {
+      _recargaPendiente = true;
+      return;
+    }
+    _solicitudEnCurso = true;
     if (!silencioso) {
       setState(() {
         _cargando = true;
@@ -66,11 +106,17 @@ class _PedidosHistorialScreenState extends State<PedidosHistorialScreen> {
           _error = "No pudimos cargar tus pedidos.";
           _cargando = false;
         });
-      } else {
+      } else if (!silencioso) {
         setState(() => _cargando = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("No se pudo actualizar tus pedidos")),
         );
+      }
+    } finally {
+      _solicitudEnCurso = false;
+      if (_recargaPendiente && mounted) {
+        _recargaPendiente = false;
+        unawaited(_cargarPedidos(silencioso: true));
       }
     }
   }

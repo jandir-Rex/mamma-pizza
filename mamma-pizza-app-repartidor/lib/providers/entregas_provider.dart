@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import '../core/app_config.dart';
 import '../core/utils.dart';
@@ -8,7 +8,7 @@ import '../services/pedidos_service.dart';
 import '../services/repartidor_service.dart';
 import '../services/ubicacion_service.dart';
 
-class EntregasProvider extends ChangeNotifier {
+class EntregasProvider extends ChangeNotifier with WidgetsBindingObserver {
   List<Entrega> _entregas = [];
   bool _cargando = true;
   bool _disponible = true;
@@ -17,9 +17,15 @@ class EntregasProvider extends ChangeNotifier {
   double? _lng;
   bool _permisoUbicacion = false;
   bool _activo = false;
+  bool _cargaEnCurso = false;
+  bool _recargaPendiente = false;
   Timer? _timer;
   StreamSubscription<geo.Position>? _posSub;
   DateTime _ultimoEnvioUbicacion = DateTime.fromMillisecondsSinceEpoch(0);
+
+  EntregasProvider() {
+    WidgetsBinding.instance.addObserver(this);
+  }
 
   List<Entrega> get entregas => _entregas;
   bool get cargando => _cargando;
@@ -54,12 +60,26 @@ class EntregasProvider extends ChangeNotifier {
     notifyListeners();
 
     await cargar();
-    _timer?.cancel();
-    _timer = Timer.periodic(
-      const Duration(seconds: AppConfig.refrescoEntregasSeg),
-      (_) => cargar(silencioso: true),
-    );
+    _actualizarTimer();
     unawaited(_iniciarUbicacion());
+  }
+
+  void _actualizarTimer() {
+    _timer?.cancel();
+    _timer = null;
+    if (!_activo || WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+      return;
+    }
+    _timer = Timer.periodic(const Duration(seconds: AppConfig.refrescoEntregasSeg), (_) => cargar(silencioso: true));
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!_activo) return;
+    if (state == AppLifecycleState.resumed) {
+      unawaited(cargar(silencioso: true));
+    }
+    _actualizarTimer();
   }
 
   void detener() {
@@ -68,17 +88,24 @@ class EntregasProvider extends ChangeNotifier {
     _posSub?.cancel();
     _timer = null;
     _posSub = null;
+    _recargaPendiente = false;
   }
 
   @override
   void dispose() {
     detener();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
   // ---------- Datos ----------
 
   Future<void> cargar({bool silencioso = false}) async {
+    if (_cargaEnCurso) {
+      _recargaPendiente = true;
+      return;
+    }
+    _cargaEnCurso = true;
     if (!silencioso) {
       _cargando = true;
       notifyListeners();
@@ -89,10 +116,15 @@ class EntregasProvider extends ChangeNotifier {
       _entregas = lista;
       _error = null;
     } catch (e) {
-      if (!silencioso) _error = mensajeError(e);
+      if (!silencioso || _entregas.isEmpty) _error = mensajeError(e);
     } finally {
+      _cargaEnCurso = false;
       _cargando = false;
       if (_activo) notifyListeners();
+      if (_activo && _recargaPendiente) {
+        _recargaPendiente = false;
+        unawaited(cargar(silencioso: true));
+      }
     }
   }
 

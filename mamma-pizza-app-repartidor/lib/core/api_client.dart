@@ -18,9 +18,9 @@ class ApiException implements Exception {
 }
 
 class ApiClient {
-  // En emulador Android usa http://10.0.2.2:4000/api
-  // En celular físico usa la IP de tu PC en la red (ej. http://192.168.1.20:4000/api)
-  static const String baseUrl = "https://mamma-pizza-backend.onrender.com";
+  static const String serverUrl = "https://mamma-pizza-backend.onrender.com";
+  static const String baseUrl = "$serverUrl/api";
+  static const Duration _timeout = Duration(seconds: 60);
 
   static Future<String?> _token() async {
     final prefs = await SharedPreferences.getInstance();
@@ -51,25 +51,31 @@ class ApiClient {
   }
 
   static Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body) async {
-    final res = await http.post(
-      Uri.parse("$baseUrl$path"),
-      headers: await _headers(),
-      body: jsonEncode(body),
-    );
+    final res = await http
+        .post(
+          Uri.parse("$baseUrl$path"),
+          headers: await _headers(),
+          body: jsonEncode(body),
+        )
+        .timeout(_timeout);
     return _procesar(res) as Map<String, dynamic>;
   }
 
   static Future<dynamic> get(String path) async {
-    final res = await http.get(Uri.parse("$baseUrl$path"), headers: await _headers());
+    final res = await http
+        .get(Uri.parse("$baseUrl$path"), headers: await _headers())
+        .timeout(_timeout);
     return _procesar(res);
   }
 
   static Future<dynamic> patch(String path, [Map<String, dynamic>? body]) async {
-    final res = await http.patch(
-      Uri.parse("$baseUrl$path"),
-      headers: await _headers(),
-      body: body != null ? jsonEncode(body) : null,
-    );
+    final res = await http
+        .patch(
+          Uri.parse("$baseUrl$path"),
+          headers: await _headers(),
+          body: body != null ? jsonEncode(body) : null,
+        )
+        .timeout(_timeout);
     return _procesar(res);
   }
 }

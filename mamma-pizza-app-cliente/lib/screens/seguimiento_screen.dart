@@ -20,12 +20,14 @@ class SeguimientoScreen extends StatefulWidget {
   State<SeguimientoScreen> createState() => _SeguimientoScreenState();
 }
 
-class _SeguimientoScreenState extends State<SeguimientoScreen> {
+class _SeguimientoScreenState extends State<SeguimientoScreen> with WidgetsBindingObserver {
   static const _respaldo = Duration(seconds: 30);
 
   Pedido? _pedido;
   bool _cargando = true;
   bool _fallo = false;
+  bool _solicitudEnCurso = false;
+  bool _recargaPendiente = false;
 
   io_client.Socket? _socket;
   Timer? _debounce;
@@ -34,18 +36,38 @@ class _SeguimientoScreenState extends State<SeguimientoScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _cargar();
     _escucharSocket();
+    _actualizarTimer();
+  }
 
-    // Red de seguridad: si el socket falla o la app estuvo en segundo plano,
-    // el estado y el código se refrescan solos mientras el pedido siga activo.
+  void _actualizarTimer() {
+    _timerRespaldo?.cancel();
+    _timerRespaldo = null;
+    if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed || !(_pedido?.activo ?? true)) {
+      return;
+    }
     _timerRespaldo = Timer.periodic(_respaldo, (_) {
-      if (_pedido?.activo ?? true) _cargar(silencioso: true);
+      _cargar(silencioso: true);
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _cargar(silencioso: true);
+    }
+    _actualizarTimer();
   }
 
   Future<void> _cargar({bool silencioso = false}) async {
     if (!mounted) return;
+    if (_solicitudEnCurso) {
+      _recargaPendiente = true;
+      return;
+    }
+    _solicitudEnCurso = true;
     if (!silencioso) setState(() => _cargando = true);
     try {
       final pedido = await PedidosService.obtenerPorId(widget.pedidoId);
@@ -54,10 +76,16 @@ class _SeguimientoScreenState extends State<SeguimientoScreen> {
         _pedido = pedido;
         _fallo = false;
       });
+      _actualizarTimer();
     } catch (_) {
       if (mounted && _pedido == null) setState(() => _fallo = true);
     } finally {
+      _solicitudEnCurso = false;
       if (mounted && !silencioso) setState(() => _cargando = false);
+      if (_recargaPendiente && mounted) {
+        _recargaPendiente = false;
+        unawaited(_cargar(silencioso: true));
+      }
     }
   }
 
@@ -92,6 +120,7 @@ class _SeguimientoScreenState extends State<SeguimientoScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _debounce?.cancel();
     _timerRespaldo?.cancel();
     _socket?.off("connect", _alConectar);
