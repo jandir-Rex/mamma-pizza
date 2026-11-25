@@ -44,13 +44,18 @@ class ApiClient {
       data = null; // el servidor devolvió algo que no es JSON
     }
     if (res.statusCode >= 400) {
-      final mensaje = (data is Map && data["error"] is String) ? data["error"] as String : "Error inesperado";
+      final mensaje = (data is Map && data["error"] is String)
+          ? data["error"] as String
+          : "Error inesperado";
       throw ApiException(mensaje, res.statusCode);
     }
     return data;
   }
 
-  static Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body) async {
+  static Future<Map<String, dynamic>> post(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
     final res = await http
         .post(
           Uri.parse("$baseUrl$path"),
@@ -68,7 +73,10 @@ class ApiClient {
     return _procesar(res);
   }
 
-  static Future<dynamic> patch(String path, [Map<String, dynamic>? body]) async {
+  static Future<dynamic> patch(
+    String path, [
+    Map<String, dynamic>? body,
+  ]) async {
     final res = await http
         .patch(
           Uri.parse("$baseUrl$path"),
@@ -77,5 +85,16 @@ class ApiClient {
         )
         .timeout(_timeout);
     return _procesar(res);
+  }
+
+  static Future<void> delete(String path, [Map<String, dynamic>? body]) async {
+    final res = await http
+        .delete(
+          Uri.parse("$baseUrl$path"),
+          headers: await _headers(),
+          body: body != null ? jsonEncode(body) : null,
+        )
+        .timeout(_timeout);
+    _procesar(res);
   }
 }

@@ -1,0 +1,68 @@
+{
+  "project_info": {
+    "project_number": "15084576449",
+    "project_id": "usuarios-xd",
+    "storage_bucket": "usuarios-xd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:15084576449:android:eec64c0675658085cd3e40",
+        "android_client_info": {
+          "package_name": "com.example.mamma_pizza_app_cliente"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "15084576449-7tko6903tjsuvko9k5l09rg69c7mmf2f.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAZ3XIKsiN8h01pkFInKL7Yen3q2fF2oUI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "15084576449-7tko6903tjsuvko9k5l09rg69c7mmf2f.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:15084576449:android:28bb5a2647788d8dcd3e40",
+        "android_client_info": {
+          "package_name": "com.example.mamma_pizza_app_repartidor"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "15084576449-7tko6903tjsuvko9k5l09rg69c7mmf2f.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAZ3XIKsiN8h01pkFInKL7Yen3q2fF2oUI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "15084576449-7tko6903tjsuvko9k5l09rg69c7mmf2f.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

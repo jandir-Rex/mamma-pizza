@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/usuario.dart';
 import '../services/auth_service.dart';
+import '../services/push_notifications_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   Usuario? usuario;
@@ -15,8 +18,13 @@ class AuthProvider extends ChangeNotifier {
     final rol = prefs.getString("rol");
     final id = prefs.getInt("id");
 
-    if (token != null && nombre != null && email != null && rol != null && id != null) {
+    if (token != null &&
+        nombre != null &&
+        email != null &&
+        rol != null &&
+        id != null) {
       usuario = Usuario(id: id, nombre: nombre, email: email, rol: rol);
+      unawaited(PushNotificationsService.syncInstallation());
     }
     cargando = false;
     notifyListeners();
@@ -52,10 +60,12 @@ class AuthProvider extends ChangeNotifier {
 
     usuario = resultado.usuario;
     notifyListeners();
+    unawaited(PushNotificationsService.syncInstallation());
   }
 
   Future<void> actualizarPerfil({String? nombre, String? telefono}) async {
-    final actualizado = await AuthService.actualizarPerfil(nombre: nombre, telefono: telefono);
+    final actualizado =
+        await AuthService.actualizarPerfil(nombre: nombre, telefono: telefono);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString("nombre", actualizado.nombre);
     usuario = actualizado;
@@ -63,6 +73,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    await PushNotificationsService.unregisterDevice();
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
     usuario = null;

@@ -70,7 +70,8 @@ class ApiClient {
     return data;
   }
 
-  static Future<dynamic> patch(String path, [Map<String, dynamic>? body]) async {
+  static Future<dynamic> patch(String path,
+      [Map<String, dynamic>? body]) async {
     final res = await http
         .patch(
           Uri.parse("$baseUrl$path"),
@@ -85,9 +86,13 @@ class ApiClient {
     return data;
   }
 
-  static Future<void> delete(String path) async {
+  static Future<void> delete(String path, [Map<String, dynamic>? body]) async {
     final res = await http
-        .delete(Uri.parse("$baseUrl$path"), headers: await _headers())
+        .delete(
+          Uri.parse("$baseUrl$path"),
+          headers: await _headers(),
+          body: body != null ? jsonEncode(body) : null,
+        )
         .timeout(_timeout);
     if (res.statusCode >= 400) {
       throw Exception(_errorMsg(_decode(res), res.statusCode));

@@ -2,6 +2,7 @@
 const crypto = require("crypto");
 const prisma = require("../../config/prisma");
 const { emitPedidoNuevo, emitPedidoActualizado } = require("../../sockets");
+const notificacionesService = require("../notificaciones/notificaciones.service");
 
 const PERMISOS_POR_CANAL = {
   SALON: "pedidos:canal:SALON",
@@ -357,6 +358,7 @@ async function confirmarPago(pedidoId, metodo, solicitante) {
   });
 
   emitPedidoActualizado(pedido);
+  void notificacionesService.notificarClienteEstado(pedido);
 
   // Pedido de delivery confirmado => se le busca repartidor de inmediato
   if (pedido.canal === "DELIVERY") {
@@ -500,6 +502,7 @@ async function actualizarEstado(pedidoId, nuevoEstado, solicitante) {
 
   // Se emite el pedido completo (el cliente recibe su código por la sala del pedido)
   emitPedidoActualizado(resultado);
+  void notificacionesService.notificarClienteEstado(resultado);
 
   // Un repartidor se liberó (entregado/cancelado): ¿hay pedidos esperando?
   if (ESTADOS_FINALES.includes(nuevoEstado)) {
@@ -755,6 +758,7 @@ async function asignarRepartidor(pedidoId, repartidorId) {
   });
 
   emitPedidoActualizado(resultado);
+  void notificacionesService.notificarRepartidorAsignado(resultado.id, resultado.repartidorId);
   return resultado;
 }
 
@@ -974,6 +978,7 @@ async function entregarPedidoConCodigo(pedidoId, codigo, solicitante) {
   }
 
   emitPedidoActualizado(resultado.entregado);
+  void notificacionesService.notificarClienteEstado(resultado.entregado);
   dispararAutoAsignacion(autoAsignarPendientes); // el repartidor ya tiene cupo libre
 
   return ocultarCodigoSiRepartidor(resultado.entregado, solicitante);

@@ -12,13 +12,16 @@ import 'perfil_screen.dart';
 import 'ruta_screen.dart';
 
 class HomeShell extends StatefulWidget {
+  static final GlobalKey<HomeShellState> navigationKey =
+      GlobalKey<HomeShellState>();
+
   const HomeShell({super.key});
 
   @override
-  State<HomeShell> createState() => _HomeShellState();
+  State<HomeShell> createState() => HomeShellState();
 }
 
-class _HomeShellState extends State<HomeShell> {
+class HomeShellState extends State<HomeShell> {
   int _indice = 0;
   late final EntregasProvider _entregas;
 
@@ -40,6 +43,8 @@ class _HomeShellState extends State<HomeShell> {
     HapticFeedback.selectionClick();
     setState(() => _indice = i);
   }
+
+  void mostrarRuta() => _ir(0);
 
   @override
   Widget build(BuildContext context) {

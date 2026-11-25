@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' show MapboxOptions;
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart'
+    show MapboxOptions;
 import 'package:provider/provider.dart';
 import 'core/mapbox_config.dart';
 import 'core/theme.dart';
@@ -7,16 +8,20 @@ import 'providers/auth_provider.dart';
 import 'providers/entregas_provider.dart';
 import 'screens/home_shell.dart';
 import 'screens/login_screen.dart';
+import 'services/push_notifications_service.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Mapbox necesita el token público antes de crear cualquier MapWidget
   MapboxOptions.setAccessToken(mapboxToken);
+  await PushNotificationsService.initialize();
 
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()..intentarSesionGuardada()),
+        ChangeNotifierProvider(
+          create: (_) => AuthProvider()..intentarSesionGuardada(),
+        ),
         ChangeNotifierProvider(create: (_) => EntregasProvider()),
       ],
       child: const MammaPizzaRepartidorApp(),
@@ -49,9 +54,13 @@ class _Arrancador extends StatelessWidget {
     if (auth.cargando) {
       return const Scaffold(
         backgroundColor: AppColors.bg,
-        body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+        body: Center(
+          child: CircularProgressIndicator(color: AppColors.primary),
+        ),
       );
     }
-    return auth.usuario != null ? const HomeShell() : const LoginScreen();
+    return auth.usuario != null
+        ? HomeShell(key: HomeShell.navigationKey)
+        : const LoginScreen();
   }
 }

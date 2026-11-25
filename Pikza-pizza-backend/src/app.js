@@ -23,6 +23,7 @@ app.use("/api/repartidores", require("./modules/repartidores/repartidores.routes
 app.use("/api/agregados", require("./modules/agregados/agregados.routes"));
 app.use("/api/direcciones", require("./modules/direcciones/direcciones.routes"));
 app.use("/api/forecasting", require("./modules/forecasting/forecasting.routes"));
+app.use("/api/notificaciones", require("./modules/notificaciones/notificaciones.routes"));
 
 app.use((req, res) => {
   res.status(404).json({ error: "Ruta no encontrada" });

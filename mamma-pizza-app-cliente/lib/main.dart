@@ -4,12 +4,16 @@ import 'core/theme.dart';
 import 'providers/auth_provider.dart';
 import 'providers/carrito_provider.dart';
 import 'screens/main_shell.dart';
+import 'services/push_notifications_service.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await PushNotificationsService.initialize();
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()..intentarSesionGuardada()),
+        ChangeNotifierProvider(
+            create: (_) => AuthProvider()..intentarSesionGuardada()),
         ChangeNotifierProvider(create: (_) => CarritoProvider()),
       ],
       child: const MammaPizzaApp(),
@@ -23,6 +27,7 @@ class MammaPizzaApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: PushNotificationsService.navigatorKey,
       title: 'Mamma Pizza',
       debugShowCheckedModeBanner: false,
       theme: appTheme,
@@ -42,10 +47,14 @@ class _Arrancador extends StatelessWidget {
     if (auth.cargando) {
       return const Scaffold(
         backgroundColor: AppColors.bg,
-        body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+        body:
+            Center(child: CircularProgressIndicator(color: AppColors.primary)),
       );
     }
 
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => PushNotificationsService.processPendingNavigation(),
+    );
     return const MainShell();
   }
 }

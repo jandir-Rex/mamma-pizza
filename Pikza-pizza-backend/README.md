@@ -26,7 +26,7 @@ npm ci
 Copy-Item .env.example .env
 ```
 
-Edita `.env` y configura `DATABASE_URL`, `JWT_SECRET` y, opcionalmente, `PORT` (por defecto `4000`). Usa credenciales proporcionadas por el equipo y un secreto JWT aleatorio. No reutilices los valores que actualmente aparecen en `.env.example`; ese archivo debe reemplazarse por placeholders y las credenciales expuestas deben rotarse.
+Edita `.env` y configura `DATABASE_URL`, `JWT_SECRET` y, opcionalmente, `PORT` (por defecto `4000`). Usa credenciales propias y un secreto JWT aleatorio. `FIREBASE_SERVICE_ACCOUNT_JSON` es opcional para iniciar el backend, pero necesario para enviar notificaciones push.
 
 Genera el cliente de Prisma y aplica las migraciones pendientes:
 
@@ -35,7 +35,7 @@ npx prisma generate
 npx prisma migrate deploy
 ```
 
-Inicia el servidor:
+Inicia el servidor. `npm start` genera el cliente Prisma y aplica las migraciones pendientes antes de levantar la API:
 
 ```powershell
 npm run dev
@@ -48,6 +48,12 @@ npm start
 ```
 
 La API queda disponible en `http://localhost:4000/api`. Comprueba el estado en `GET /api/health`.
+
+## Notificaciones push Android
+
+Las apps cliente y repartidor usan Firebase Cloud Messaging. Configura en Render la variable secreta `FIREBASE_SERVICE_ACCOUNT_JSON` con el contenido JSON de una sola clave privada de Firebase Admin del proyecto compartido por ambas apps. No uses el certificado Web Push y nunca guardes esta clave privada en el repositorio. Sin la variable, el backend sigue atendiendo pedidos y registra en los logs que los avisos push están deshabilitados.
+
+Al iniciar con `npm start`, Prisma aplica también la migración de instalaciones FCM. Cada app solicita permiso de notificaciones, registra su ID de instalación al iniciar sesión y lo elimina al cerrar sesión. La asignación de pedidos avisa al repartidor; los cambios de estado avisan al cliente.
 
 ## API disponible
 
@@ -68,6 +74,7 @@ Todas las rutas están bajo `/api`. Las rutas marcadas como protegidas requieren
 | Administración de mesas | `POST /mesas`, `PUT /mesas/:id`, `DELETE /mesas/:id` | `ADMIN` o `PERSONALIZADO` con `mesas:admin`. |
 | Repartidores | `GET /repartidores`, `GET /repartidores/disponibles`, `GET /repartidores/sugerido/:pedidoId` | `ADMIN` o `PERSONALIZADO` con `reparto:gestion`; consultar repartidores con capacidad, candidatos online que aún tienen cupo y una sugerencia híbrida ponderada por igual entre carga relativa y distancia en línea recta. La sugerencia retorna distancia, pedidos activos, capacidad y puntaje de balance (menor es mejor); no es asignación automática ni ETA vial. |
 | Perfil de repartidor | `PATCH /repartidores/ubicacion`, `PATCH /repartidores/disponibilidad`, `PATCH /repartidores/vehiculo` | Solo `REPARTIDOR`; actualizar su propia información. |
+| Notificaciones | `POST /notificaciones/instalacion`, `DELETE /notificaciones/instalacion` | Rutas protegidas para registrar y retirar el FID del dispositivo; cada app solo acepta el rol correspondiente. |
 | Agregados | `GET /agregados` | Listar agregados disponibles. |
 | Administración de agregados | `POST /agregados`, `PUT /agregados/:id`, `PATCH /agregados/:id/precio` | `ADMIN` o `PERSONALIZADO` con `productos:admin`; crear y editar agregados, o modificar precios por tamaño. |
 | Gestión de usuarios | `GET /auth/usuarios`, `POST /auth/staff`, `PUT /auth/usuarios/:id`, `DELETE /auth/usuarios/:id` | `ADMIN` o `PERSONALIZADO` con `usuarios:admin`. El rol configurable no puede modificar/eliminar cuentas ADMIN, crear Administradores o conceder permisos que él mismo no tenga. Para repartidores se configura por usuario la capacidad máxima de pedidos activos (por defecto 2); no se puede reducir por debajo de su carga actual. |
@@ -77,7 +84,7 @@ Las rutas de escritura validan sus datos y responden con un error HTTP cuando la
 
 La migración `20261003150000_rol_personalizado` añade `PERSONALIZADO` al enum `RolUsuario`; `20261003161800_usuario_ciudad` agrega el campo `ciudad` al perfil; `20261003170000_categoria_subcategorias` agrega la relación opcional entre una categoría principal y sus subcategorías; `20261003171500_categoria_area_preparacion` habilita clasificar categorías para `HORNO` o `BARRA`; `20261003173000_capacidad_pedidos_repartidor` agrega capacidad activa por repartidor, con valor inicial 2. Aplica las migraciones pendientes y regenera Prisma Client. Los endpoints protegidos consultan los permisos vigentes en base de datos; el panel sincroniza los cambios al recibir la notificación de sesión, al volver a enfocarse o como máximo cada 30 segundos.
 
-La asignación automática aún no está activada: primero debe integrarse el flujo de checkout y el tratamiento distinto de tarjeta/contraentrega, y decidir en qué transición confirmada se despacha el pedido. No existe todavía ETA por calles, seguimiento del cliente ni notificaciones push.
+La asignación automática selecciona repartidores disponibles con capacidad, ponderando carga y distancia en línea recta; no calcula ETA por calles. El cliente puede consultar el pedido desde la app y recibe avisos push por cambios de estado cuando FCM está configurado.
 
 ## Eventos en tiempo real
 
