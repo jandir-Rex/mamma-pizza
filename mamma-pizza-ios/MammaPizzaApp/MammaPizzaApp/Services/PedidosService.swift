@@ -3,6 +3,9 @@ import Foundation
 struct ConfigPago: Decodable {
     let yapeNumero: String?
     let yapeTitular: String?
+    let yapeQrUrl: String?
+
+    var tieneQr: Bool { !(yapeQrUrl ?? "").isEmpty }
 }
 
 enum PedidosService {

@@ -40,10 +40,21 @@ struct YapeFormularioView: View {
     @State private var item: PhotosPickerItem?
     @State private var copiado = false
     @State private var errorImagen = false
+    @State private var qrAmpliado = false
+
+    /// URL del QR. Si el backend la manda relativa (/uploads/...), se completa con el host.
+    private var qrURL: URL? {
+        guard let s = config?.yapeQrUrl?.trimmingCharacters(in: .whitespaces), !s.isEmpty else { return nil }
+        if s.hasPrefix("/") { return URL(string: AppConfig.host + s) }
+        return URL(string: s)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            paso("1. Yapea \(total.soles) a este número")
+            paso(qrURL != nil
+                 ? "1. Escanea el QR o yapea \(total.soles) al número"
+                 : "1. Yapea \(total.soles) a este número")
+            if let url = qrURL { bloqueQr(url) }
             numeroYape
 
             paso("2. Adjunta la captura de tu Yape")
@@ -75,11 +86,52 @@ struct YapeFormularioView: View {
                 item = nil
             }
         }
+        .sheet(isPresented: $qrAmpliado) {
+            if let url = qrURL { QRAmpliadoView(url: url) }
+        }
     }
 
     private func paso(_ t: String) -> some View {
         Text(t).font(.subheadline.weight(.bold))
     }
+
+    // MARK: QR
+
+    private func bloqueQr(_ url: URL) -> some View {
+        VStack(spacing: 4) {
+            Button { qrAmpliado = true } label: {
+                AsyncImage(url: url) { fase in
+                    switch fase {
+                    case .success(let img):
+                        img.resizable().scaledToFit()
+                    case .failure:
+                        VStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle")
+                            Text("No se pudo cargar el QR").font(.caption)
+                        }
+                        .foregroundStyle(AppColors.gris)
+                    default:
+                        ProgressView()
+                    }
+                }
+                .frame(width: 200, height: 260)
+                .padding(8)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(AppColors.hairline)
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Código QR de Yape. Toca para ampliar")
+
+            Text("Toca el QR para ampliarlo")
+                .font(.caption).foregroundStyle(AppColors.gris)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: Número
 
     @ViewBuilder private var numeroYape: some View {
         if cargando {
@@ -106,11 +158,13 @@ struct YapeFormularioView: View {
                 .buttonStyle(.borderless)
                 .accessibilityLabel(copiado ? "Número copiado" : "Copiar número")
             }
-        } else {
+        } else if qrURL == nil {
             Text("El número de Yape no está disponible. Comunícate con el local.")
                 .font(.footnote).foregroundStyle(AppColors.danger)
         }
     }
+
+    // MARK: Captura
 
     @ViewBuilder private var capturaView: some View {
         if let captura {
@@ -136,6 +190,46 @@ struct YapeFormularioView: View {
             .buttonStyle(.bordered)
             .controlSize(.large)
             .tint(AppColors.primary)
+        }
+    }
+}
+
+// MARK: - QR ampliado (zoom por pellizco)
+
+struct QRAmpliadoView: View {
+    let url: URL
+    @Environment(\.dismiss) private var dismiss
+    @State private var escala: CGFloat = 1
+    @GestureState private var gesto: CGFloat = 1
+
+    var body: some View {
+        NavigationStack {
+            AsyncImage(url: url) { fase in
+                switch fase {
+                case .success(let img):
+                    img.resizable().scaledToFit()
+                case .failure:
+                    Text("No se pudo cargar el QR").foregroundStyle(AppColors.gris)
+                default:
+                    ProgressView()
+                }
+            }
+            .padding()
+            .scaleEffect(max(1, escala * gesto))
+            .gesture(
+                MagnificationGesture()
+                    .updating($gesto) { valor, estado, _ in estado = valor }
+                    .onEnded { escala = max(1, min(escala * $0, 4)) }
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.white)
+            .navigationTitle("QR de Yape")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Cerrar") { dismiss() }
+                }
+            }
         }
     }
 }
