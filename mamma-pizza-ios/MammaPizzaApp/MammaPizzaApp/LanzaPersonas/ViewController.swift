@@ -125,6 +125,7 @@ final class ViewController: UIViewController, UICollisionBehaviorDelegate {
     private var overlay: UIView?
     private var queueViews: [UIImageView] = []
     private var dotViews: [UIView] = []
+    private var cloudAnimators: [UIViewPropertyAnimator] = []
 
     // MARK: Física
     private var animator: UIDynamicAnimator!
@@ -142,6 +143,10 @@ final class ViewController: UIViewController, UICollisionBehaviorDelegate {
     private var worldActive = false
     private var abilityUsed = false
     private var dragging = false
+    private var dragMoved = false
+    private var panStart = Date()
+    private let minPressDuration: TimeInterval = 0.15
+    private let minLaunchStretch: CGFloat = 25
     private var finishScheduled = false
     private var queue: [Kind] = []
     private var current: ProjectileView?
@@ -161,7 +166,9 @@ final class ViewController: UIViewController, UICollisionBehaviorDelegate {
 
     override var prefersStatusBarHidden: Bool { return true }
     override var prefersHomeIndicatorAutoHidden: Bool { return true }
-    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { return .landscape }
+    /// Dinámico: landscape mientras juega, portrait al cerrar.
+    private var orientationAllowed: UIInterfaceOrientationMask = .landscape
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { return orientationAllowed }
 
     // MARK: Ciclo de vida
     override func viewDidLoad() {
@@ -189,39 +196,45 @@ final class ViewController: UIViewController, UICollisionBehaviorDelegate {
         setupHUD()
 
         let pan = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
+        pan.minimumNumberOfTouches = 1
+        pan.maximumNumberOfTouches = 1
+        pan.cancelsTouchesInView = false
         view.addGestureRecognizer(pan)
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
+        tap.numberOfTapsRequired = 1
+        tap.cancelsTouchesInView = false
+        // El tap NO debe competir con el pan de apuntado: cede si el pan comienza.
+        tap.require(toFail: pan)
         view.addGestureRecognizer(tap)
     }
+
+    private var lastLayoutSize: CGSize = .zero
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         gradient.frame = sky.bounds
-        
-        // Ajuste de rotación: reiniciar el nivel actual con las nuevas dimensiones
-        if sky.frame.size != view.bounds.size {
-            sky.frame = view.bounds
-            world.frame = view.bounds
-            gradient.frame = sky.bounds
-            
-            // Reconstruir la escena completa con el nuevo tamaño
-            if animator != nil && !personImages.isEmpty {
-                let currentLevel = level
-                let currentScore = score
-                let currentState = state
-                
-                layoutScene()
-                setupPhysics()
-                
-                if currentState != .menu {
-                    loadScene(currentLevel)
-                    score = currentScore
-                    updateHUD()
-                } else {
-                    showMenu()
-                }
-            }
-        }
+        sky.frame = view.bounds
+        world.frame = view.bounds
+        gradient.frame = sky.bounds
+
+        // Solo reaccionar a cambios reales de tamaño (rotación / primer layout).
+        let newSize = view.bounds.size
+        guard newSize != lastLayoutSize else { return }
+        let oldSize = lastLayoutSize
+        let firstTime = oldSize == .zero
+        lastLayoutSize = newSize
+
+        // Primera vez: viewDidAppear monta escena y física.
+        if firstTime { return }
+        guard animator != nil else { return }
+
+        // Rotación con partida en curso: NO recrear nivel, NO recrear animator.
+        layoutDecor()
+        rebuildBoundaries()
+        repositionDynamicItems(from: oldSize, to: newSize)
+        if state == .ready { current?.center = anchor }
+        updateBand()
+        updateQueue()
     }
     
     /// Reposiciona los elementos existentes al nuevo tamaño de pantalla
@@ -272,22 +285,39 @@ final class ViewController: UIViewController, UICollisionBehaviorDelegate {
         updateBand()
     }
 
+    private var didSetup = false
+    private var orientationRetries = 0
+
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        if animator == nil {
-            // Si la pantalla aún está en vertical, esperar a que rote a horizontal
-            if view.bounds.width < view.bounds.height {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                    self?.viewDidAppear(animated)
-                }
-                return
+        guard !didSetup else { return }
+        // Esperar a que la vista esté realmente horizontal (iPad tarda en rotar).
+        if view.bounds.width < view.bounds.height, orientationRetries < 10 {
+            orientationRetries += 1
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+                self?.viewDidAppear(animated)
             }
-            layoutScene()
-            setupPhysics()
-            loadPersonImages()
-            try? AVAudioSession.sharedInstance().setCategory(.ambient)
-            showMenu()
-            startWatchdog()
+            return
+        }
+        didSetup = true
+        lastLayoutSize = view.bounds.size
+        layoutScene()
+        setupPhysics()
+        loadPersonImages()
+        try? AVAudioSession.sharedInstance().setCategory(.ambient)
+        showMenu()
+        startWatchdog()
+    }
+
+    // MARK: Restauración de orientación
+    /// Cambia la máscara a portrait y fuerza la geometría sobre el scene REAL de este VC.
+    func requestPortraitRestore() {
+        orientationAllowed = .portrait
+        AppDelegate.orientationLock = .portrait
+        setNeedsUpdateOfSupportedInterfaceOrientations()
+        if let scene = view.window?.windowScene {
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait)) { _ in }
+            scene.keyWindow?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
         }
     }
 
@@ -331,7 +361,9 @@ final class ViewController: UIViewController, UICollisionBehaviorDelegate {
                 self.watchdog?.invalidate()
                 self.animator?.removeAllBehaviors()
                 self.audioPlayer?.stop()
-                // Notificar a SwiftUI para cerrar
+                // 1) Cambiar la máscara permitida a portrait y avisar al sistema.
+                self.requestPortraitRestore()
+                // 2) Notificar a SwiftUI para cerrar el fullScreenCover.
                 self.onClose?()
             }, for: .touchUpInside)
             view.addSubview(closeButton)
@@ -377,54 +409,11 @@ final class ViewController: UIViewController, UICollisionBehaviorDelegate {
     }
 
     // MARK: Escena (suelo, colinas, nubes, resortera)
+    /// Monta la escena por primera vez: decoración + trayectoria.
     private func layoutScene() {
-        let w = view.bounds.width
-        let h = view.bounds.height
-        groundY = h - 44
-        anchor = CGPoint(x: max(170, view.safeAreaInsets.left + 150), y: groundY - 130)
-
-        // Colinas
-        let hill1 = UIView(frame: CGRect(x: w * 0.05, y: groundY - 70, width: 380, height: 220))
-        hill1.backgroundColor = UIColor(red: 0.45, green: 0.78, blue: 0.45, alpha: 0.6)
-        hill1.layer.cornerRadius = 110
-        let hill2 = UIView(frame: CGRect(x: w * 0.55, y: groundY - 100, width: 460, height: 260))
-        hill2.backgroundColor = UIColor(red: 0.38, green: 0.70, blue: 0.40, alpha: 0.5)
-        hill2.layer.cornerRadius = 130
-        sky.addSubview(hill1)
-        sky.addSubview(hill2)
-
-        // Nubes (animación repetida)
-        for i in 0..<3 {
-            let cloud = UILabel()
-            cloud.text = "☁️"
-            cloud.font = .systemFont(ofSize: CGFloat(44 + i * 10))
-            cloud.sizeToFit()
-            let y = 50 + CGFloat(i) * 55
-            cloud.frame.origin = CGPoint(x: -100, y: y)
-            sky.addSubview(cloud)
-            UIView.animate(withDuration: 38 + Double(i) * 12, delay: -Double(i) * 14,
-                           options: [.repeat, .curveLinear], animations: {
-                cloud.frame.origin.x = w + 100
-            }, completion: nil)
-        }
-
-        // Suelo
-        let ground = UIView(frame: CGRect(x: 0, y: groundY, width: w, height: h - groundY))
-        ground.backgroundColor = UIColor(red: 0.45, green: 0.30, blue: 0.18, alpha: 1)
-        let grass = UIView(frame: CGRect(x: 0, y: 0, width: w, height: 12))
-        grass.backgroundColor = UIColor(red: 0.30, green: 0.68, blue: 0.30, alpha: 1)
-        ground.addSubview(grass)
-        sky.addSubview(ground)
-
-        // Resortera
-        for (post, dx) in [(leftPost, CGFloat(-18)), (rightPost, CGFloat(8))] {
-            post.backgroundColor = UIColor(red: 0.38, green: 0.22, blue: 0.12, alpha: 1)
-            post.layer.cornerRadius = 5
-            post.frame = CGRect(x: anchor.x + dx, y: anchor.y + 6, width: 10, height: groundY - anchor.y - 6)
-            world.addSubview(post)
-        }
-
-        // Puntos de trayectoria
+        for d in dotViews { d.removeFromSuperview() }
+        dotViews.removeAll()
+        layoutDecor()
         for _ in 0..<16 {
             let d = UIView(frame: CGRect(x: 0, y: 0, width: 7, height: 7))
             d.backgroundColor = UIColor.white.withAlphaComponent(0.9)
@@ -432,6 +421,120 @@ final class ViewController: UIViewController, UICollisionBehaviorDelegate {
             d.isHidden = true
             world.addSubview(d)
             dotViews.append(d)
+        }
+    }
+
+    /// Reconstruye SOLO la decoración (colinas, nubes, suelo, postes).
+    /// Idempotente: limpia lo decorativo antes de volver a montar.
+    private func layoutDecor() {
+        let w = view.bounds.width
+        let h = view.bounds.height
+        groundY = h - max(30, h * 0.08)
+        anchor = CGPoint(x: max(w * 0.14, view.safeAreaInsets.left + w * 0.06), y: groundY - h * 0.18)
+
+        // Limpieza de decoración previa (todo lo que NO sea HUD ni física dinámica).
+        for sub in sky.subviews { sub.removeFromSuperview() }
+        leftPost.removeFromSuperview()
+        rightPost.removeFromSuperview()
+
+        // Colinas proporcionales
+        let hill1 = UIView(frame: CGRect(x: w * 0.05, y: groundY - h * 0.10, width: w * 0.28, height: h * 0.30))
+        hill1.backgroundColor = UIColor(red: 0.45, green: 0.78, blue: 0.45, alpha: 0.6)
+        hill1.layer.cornerRadius = w * 0.08
+        let hill2 = UIView(frame: CGRect(x: w * 0.55, y: groundY - h * 0.14, width: w * 0.34, height: h * 0.34))
+        hill2.backgroundColor = UIColor(red: 0.38, green: 0.70, blue: 0.40, alpha: 0.5)
+        hill2.layer.cornerRadius = w * 0.09
+        sky.addSubview(hill1)
+        sky.addSubview(hill2)
+
+        // Nubes: velocidad constante en pt/s, independiente del tamaño de pantalla.
+        for a in cloudAnimators { a.stopAnimation(true) }
+        cloudAnimators.removeAll()
+        for i in 0..<3 { spawnCloud(index: i) }
+
+        // Suelo
+        let ground = UIView(frame: CGRect(x: 0, y: groundY, width: w, height: h - groundY))
+        ground.backgroundColor = UIColor(red: 0.45, green: 0.30, blue: 0.18, alpha: 1)
+        let grass = UIView(frame: CGRect(x: 0, y: 0, width: w, height: max(8, h * 0.02)))
+        grass.backgroundColor = UIColor(red: 0.30, green: 0.68, blue: 0.30, alpha: 1)
+        ground.addSubview(grass)
+        sky.addSubview(ground)
+
+        // Resortera
+        let postW = max(8, w * 0.012)
+        for (post, dx) in [(leftPost, CGFloat(-18)), (rightPost, CGFloat(8))] {
+            post.backgroundColor = UIColor(red: 0.38, green: 0.22, blue: 0.12, alpha: 1)
+            post.layer.cornerRadius = postW / 2
+            post.frame = CGRect(x: anchor.x + dx * postW / 10, y: anchor.y + 6, width: postW, height: groundY - anchor.y - 6)
+            world.addSubview(post)
+        }
+    }
+
+    /// Crea una nube y programa cruces continuos a velocidad constante (pt/s).
+    /// La nube se autodestruye si su superview desaparece; no deja animaciones huérfanas.
+    private func spawnCloud(index i: Int) {
+        let w = view.bounds.width
+        let h = view.bounds.height
+        let speed: CGFloat = 28  // pt/s, natural
+        let cloud = UILabel()
+        cloud.text = "☁️"
+        cloud.font = .systemFont(ofSize: max(28, h * 0.08) + CGFloat(i) * 6)
+        cloud.sizeToFit()
+        let y = h * 0.08 + CGFloat(i) * h * 0.09
+        cloud.frame.origin = CGPoint(x: -cloud.bounds.width, y: y)
+        sky.addSubview(cloud)
+        startCloudAnimator(cloud: cloud, speed: speed)
+    }
+
+    private func startCloudAnimator(cloud: UILabel, speed: CGFloat) {
+        let w = view.bounds.width
+        let travel = w + cloud.bounds.width * 2
+        let anim = UIViewPropertyAnimator(duration: TimeInterval(travel / speed), curve: .linear) {
+            cloud.frame.origin.x = w + cloud.bounds.width
+        }
+        anim.addCompletion { [weak self, weak cloud] _ in
+            guard let self = self, let cloud = cloud, cloud.superview != nil else { return }
+            cloud.frame.origin.x = -cloud.bounds.width
+            self.startCloudAnimator(cloud: cloud, speed: speed)
+        }
+        anim.startAnimation()
+        cloudAnimators.append(anim)
+    }
+
+    // MARK: Rotación: límites y reposicionamiento dinámico
+    /// Re-crea el boundary del suelo con las dimensiones actuales, sin recrear el animator.
+    private func rebuildBoundaries() {
+        guard let collision = collision else { return }
+        let w = world.bounds.width
+        collision.removeBoundary(withIdentifier: "ground" as NSString)
+        collision.addBoundary(withIdentifier: "ground" as NSString,
+                              from: CGPoint(x: -2000, y: groundY),
+                              to: CGPoint(x: w + 2000, y: groundY))
+    }
+
+    /// Reescala proporcionalmente bloques, rivales, proyectil en mano y en vuelo
+    /// para que conserven su posición relativa tras rotar (iPad incluido).
+    private func repositionDynamicItems(from old: CGSize, to new: CGSize) {
+        guard old.width > 0, old.height > 0 else { return }
+        let sx = new.width / old.width
+        let sy = new.height / old.height
+        func scaled(_ r: CGRect) -> CGRect {
+            CGRect(x: r.origin.x * sx, y: r.origin.y * sy, width: r.width, height: r.height)
+        }
+        func rescale(_ v: UIView) {
+            let oldC = v.center
+            v.frame = scaled(v.frame)
+            v.center = CGPoint(x: oldC.x * sx, y: oldC.y * sy)
+        }
+        for b in blocks { rescale(b) }
+        for r in rivals { rescale(r) }
+        for p in flying { rescale(p) }
+        if let c = current { rescale(c) }
+        // Reanclar cuerpos dinámicos al nuevo centro (UIKit Dynamics cachea posiciones).
+        for (v, _) in bodies {
+            if let dynamic = v as? UIView {
+                animator.updateItem(usingCurrentState: dynamic)
+            }
         }
     }
 
@@ -660,8 +763,12 @@ final class ViewController: UIViewController, UICollisionBehaviorDelegate {
         return top
     }
 
+    /// Escala global del juego respecto a un iPhone apaisado de referencia (~390 pt de alto).
+    private var sizeScale: CGFloat { max(0.85, min(2.2, view.bounds.height / 390)) }
+
     private func addBlock(_ m: Mat, cx: CGFloat, bottom: CGFloat, w: CGFloat, h: CGFloat) {
-        let b = BlockView(frame: CGRect(x: cx - w / 2, y: bottom - h, width: w, height: h))
+        let s = sizeScale
+        let b = BlockView(frame: CGRect(x: cx - (w * s) / 2, y: bottom - h * s, width: w * s, height: h * s))
         b.material = m
         b.hp = m.hp
         b.points = m.points
@@ -674,17 +781,18 @@ final class ViewController: UIViewController, UICollisionBehaviorDelegate {
     }
 
     private func addRival(cx: CGFloat, bottom: CGFloat) {
-        let r = RivalView(frame: CGRect(x: cx - rivalSize / 2, y: bottom - rivalSize, width: rivalSize, height: rivalSize))
+        let rs = rivalSize * sizeScale
+        let r = RivalView(frame: CGRect(x: cx - rs / 2, y: bottom - rs, width: rs, height: rs))
         r.isRival = true
         r.hp = 2
         r.points = 200
         r.backgroundColor = .systemGreen
-        r.layer.cornerRadius = rivalSize / 2
+        r.layer.cornerRadius = rs / 2
         r.layer.borderWidth = 2
         r.layer.borderColor = UIColor.white.cgColor
         let l = UILabel(frame: r.bounds)
         l.text = "😠"
-        l.font = .systemFont(ofSize: 22)
+        l.font = .systemFont(ofSize: 22 * sizeScale)
         l.textAlignment = .center
         r.addSubview(l)
         world.addSubview(r)
@@ -722,6 +830,7 @@ final class ViewController: UIViewController, UICollisionBehaviorDelegate {
         finishScheduled = false
         restSince = nil
         dragging = false
+        dragMoved = false
     }
 
     private func loadScene(_ n: Int) {
@@ -760,10 +869,11 @@ final class ViewController: UIViewController, UICollisionBehaviorDelegate {
         let p = ProjectileView(image: img)
         p.personName = name
         p.kind = kind
-        p.frame = CGRect(x: 0, y: 0, width: kind.size, height: kind.size)
+        let s = kind.size * sizeScale
+        p.frame = CGRect(x: 0, y: 0, width: s, height: s)
         p.contentMode = .scaleAspectFill
         p.clipsToBounds = true
-        p.layer.cornerRadius = kind.size / 2
+        p.layer.cornerRadius = s / 2
         p.layer.borderWidth = 3
         p.layer.borderColor = kind.color.cgColor
         return p
@@ -794,11 +904,13 @@ final class ViewController: UIViewController, UICollisionBehaviorDelegate {
     private func updateQueue() {
         for q in queueViews { q.removeFromSuperview() }
         queueViews.removeAll()
-        let size: CGFloat = 22
+        let w = view.bounds.width
+        let h = view.bounds.height
+        let size = max(20, min(40, h * 0.055))
         let count = max(queue.count, 1)
-        let avail = view.bounds.width * 0.28
+        let avail = w * 0.30
         let step = min(size + 6, avail / CGFloat(count))
-        let y = view.safeAreaInsets.top + 44
+        let y = view.safeAreaInsets.top + max(36, h * 0.06)
         for (i, k) in queue.enumerated() {
             let img = personImages[(personIndex + i) % personImages.count]
             let v = UIImageView(image: img)
@@ -846,9 +958,15 @@ final class ViewController: UIViewController, UICollisionBehaviorDelegate {
         let loc = g.location(in: world)
         switch g.state {
         case .began:
-            dragging = hypot(loc.x - p.center.x, loc.y - p.center.y) < 90
+            let hitRadius = max(90, 60 * sizeScale)
+            let near = hypot(loc.x - p.center.x, loc.y - p.center.y) < hitRadius
+            dragging = near
+            dragMoved = false
+            panStart = Date()
         case .changed:
             guard dragging else { return }
+            // Solo se mueve si el dedo se separó lo suficiente del ancla.
+            dragMoved = true
             var dx = loc.x - anchor.x
             var dy = loc.y - anchor.y
             let d = hypot(dx, dy)
@@ -862,11 +980,15 @@ final class ViewController: UIViewController, UICollisionBehaviorDelegate {
             updateBand()
             showTrajectory(from: c)
         case .ended, .cancelled:
-            guard dragging else { return }
+            // Nunca lanzar si no se arrastró realmente con el dedo.
+            let held = Date().timeIntervalSince(panStart)
+            let wasDragging = dragging
             dragging = false
             hideTrajectory()
             let stretch = hypot(p.center.x - anchor.x, p.center.y - anchor.y)
-            if stretch > 25 && g.state == .ended {
+            let canLaunch = g.state == .ended && wasDragging && dragMoved &&
+                            stretch > minLaunchStretch && held >= minPressDuration
+            if canLaunch {
                 launch(p)
             } else {
                 UIView.animate(withDuration: 0.4, delay: 0,
@@ -998,11 +1120,9 @@ final class ViewController: UIViewController, UICollisionBehaviorDelegate {
             retire(p)
         }
 
-        // Victoria: ya no quedan enemigos registrados
-        // SOLO verificar victoria si el nivel está activo (no en menú ni en ended)
-        guard state == .ready || state == .flying else { return }
+        // Victoria: SOLO durante un lanzamiento o su resolución, nunca en .ready ni en .menu.
+        guard state == .flying || state == .resolving else { return }
         if rivals.isEmpty { levelWon(); return }
-        guard state == .flying else { return }
 
         // Fin del turno: todo quieto durante un rato, o tiempo máximo de seguridad
         let elapsed = Date().timeIntervalSince(launchTime)
@@ -1280,8 +1400,9 @@ final class ViewController: UIViewController, UICollisionBehaviorDelegate {
             btn.configuration = cfg
             btn.titleLabel?.font = .systemFont(ofSize: 22, weight: .bold)
             
-            btn.widthAnchor.constraint(equalToConstant: 66).isActive = true
-            btn.heightAnchor.constraint(equalToConstant: 66).isActive = true
+            let side = max(44, min(84, view.bounds.width / 14))
+            btn.widthAnchor.constraint(equalToConstant: side).isActive = true
+            btn.heightAnchor.constraint(equalToConstant: side).isActive = true
             
             if isUnlocked {
                 btn.addAction(UIAction { [weak self] _ in
@@ -1355,7 +1476,8 @@ final class ViewController: UIViewController, UICollisionBehaviorDelegate {
         }
         let b = UIButton(configuration: cfg)
         b.addAction(UIAction { _ in action() }, for: .touchUpInside)
-        b.widthAnchor.constraint(equalToConstant: 240).isActive = true
+        let w = max(200, min(360, view.bounds.width * 0.5))
+        b.widthAnchor.constraint(equalToConstant: w).isActive = true
         return b
     }
 

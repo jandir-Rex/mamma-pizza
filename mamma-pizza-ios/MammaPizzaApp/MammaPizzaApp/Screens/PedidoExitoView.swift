@@ -86,7 +86,11 @@ struct PedidoExitoView: View {
         .fondoApp()
         .sensoryFeedback(.success, trigger: aparecio)
         .onAppear { aparecio = true }
-        .fullScreenCover(isPresented: $mostrarMinijuego) {
+        .fullScreenCover(isPresented: $mostrarMinijuego, onDismiss: {
+            // Cualquier ruta de cierre (X, swipe, sistema) restaura portrait.
+            AppDelegate.orientationLock = .portrait
+            forceOrientation(.portrait)
+        }) {
             LanzaPersonasContainer(onClose: {
                 mostrarMinijuego = false
             })
