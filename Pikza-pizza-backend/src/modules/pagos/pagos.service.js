@@ -37,7 +37,19 @@ function baseUrl(req) {
 
 /** Lo que consumen las apps de los clientes (GET /pedidos/config-pago). */
 async function configPublica(req) {
-  const config = await obtenerConfig();
+  let config;
+  try {
+    config = await obtenerConfig();
+  } catch (err) {
+    // El checkout del cliente nunca debe quedarse sin número por un fallo de la tabla nueva
+    // (por ejemplo, migración pendiente): se responde con lo que haya en el .env y se deja el aviso.
+    console.error("[pagos] No se pudo leer config_pago, se usa el .env:", err.message);
+    return {
+      yapeNumero: process.env.YAPE_NUMERO || null,
+      yapeTitular: process.env.YAPE_TITULAR || null,
+      yapeQrUrl: null,
+    };
+  }
   return {
     yapeNumero: config.yapeNumero,
     yapeTitular: config.yapeTitular,
