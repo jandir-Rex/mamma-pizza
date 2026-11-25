@@ -4,6 +4,9 @@ const errorHandler = require("./middlewares/error.middleware");
 
 const app = express();
 
+// Detrás del proxy de Render: así req.protocol sale "https" y la URL del QR carga en el celular
+app.set("trust proxy", 1);
+
 app.use(cors());
 app.use(express.json());
 

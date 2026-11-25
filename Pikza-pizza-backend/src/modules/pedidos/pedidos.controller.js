@@ -12,6 +12,7 @@ const {
   auditarPedidosQuerySchema,
 } = require("./pedidos.validation");
 const pedidosService = require("./pedidos.service");
+const pagosService = require("../pagos/pagos.service"); // 👈 NUEVO
 
 function manejarZodError(err, res, next) {
   if (err.name === "ZodError") {
@@ -165,12 +166,14 @@ async function rechazarComprobante(req, res, next) {
   }
 }
 
-// GET /config-pago -> a dónde yapear
-function configPago(req, res) {
-  res.json({
-    yapeNumero: process.env.YAPE_NUMERO ?? null,
-    yapeTitular: process.env.YAPE_TITULAR ?? null,
-  });
+// GET /config-pago -> a dónde yapear (número, titular y URL del QR)
+// 👈 CAMBIADO: antes leía solo del .env, ahora lee lo que guardas en el panel
+async function configPago(req, res, next) {
+  try {
+    res.json(await pagosService.configPublica(req));
+  } catch (err) {
+    next(err);
+  }
 }
 
 async function misEntregas(req, res, next) {

@@ -15,7 +15,7 @@ BoxDecoration _caja({Color? color, Color? borde}) => BoxDecoration(
     );
 
 // ---------------------------------------------------------------------------
-// Instrucciones de Yape + captura + nombre (checkout y seguimiento)
+// Instrucciones de Yape + QR + captura + nombre (checkout y seguimiento)
 // ---------------------------------------------------------------------------
 class YapeFormulario extends StatefulWidget {
   final double total;
@@ -37,6 +37,7 @@ class YapeFormulario extends StatefulWidget {
 class _YapeFormularioState extends State<YapeFormulario> {
   ConfigPago? _config;
   bool _cargando = true;
+  String? _errorCarga;
   Uint8List? _bytes;
 
   @override
@@ -52,10 +53,17 @@ class _YapeFormularioState extends State<YapeFormulario> {
   }
 
   Future<void> _cargarConfig() async {
+    setState(() {
+      _cargando = true;
+      _errorCarga = null;
+    });
     try {
       final c = await PedidosService.configPago();
+      debugPrint("CONFIG PAGO => ${c.yapeNumero} | ${c.yapeTitular} | ${c.yapeQrUrl}");
       if (mounted) setState(() => _config = c);
-    } catch (_) {
+    } catch (e) {
+      debugPrint("ERROR configPago: $e");
+      if (mounted) setState(() => _errorCarga = e.toString().replaceFirst("Exception: ", ""));
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
@@ -70,9 +78,119 @@ class _YapeFormularioState extends State<YapeFormulario> {
     widget.onCaptura(f);
   }
 
+  void _verQrGrande(String url) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        child: InteractiveViewer(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Image.network(url, fit: BoxFit.contain),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _bloqueQr(String url) {
+    return Column(
+      children: [
+        Center(
+          child: GestureDetector(
+            onTap: () => _verQrGrande(url),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _borde),
+              ),
+              child: Image.network(
+                url,
+                width: 200,
+                height: 260,
+                fit: BoxFit.contain,
+                loadingBuilder: (_, child, prog) => prog == null
+                    ? child
+                    : const SizedBox(
+                        width: 200,
+                        height: 260,
+                        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                      ),
+                errorBuilder: (_, __, ___) => SizedBox(
+                  width: 200,
+                  height: 140,
+                  child: Center(
+                    child: Text(
+                      "No se pudo cargar el QR\n$url",
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 10.5),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        const Text("Toca el QR para ampliarlo", style: TextStyle(color: AppColors.gray, fontSize: 11.5)),
+        const SizedBox(height: 10),
+      ],
+    );
+  }
+
+  Widget _bloqueNumero(String numero) {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(numero, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+              if ((_config?.yapeTitular ?? "").isNotEmpty)
+                Text(_config!.yapeTitular!, style: const TextStyle(color: AppColors.gray, fontSize: 12)),
+            ],
+          ),
+        ),
+        IconButton(
+          tooltip: "Copiar número",
+          icon: const Icon(Icons.copy_rounded),
+          onPressed: () {
+            Clipboard.setData(ClipboardData(text: numero));
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Número copiado")));
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _bloqueSinDatos(String? numero, String? qrUrl) {
+    final detalle = _errorCarga != null
+        ? "ERROR: $_errorCarga"
+        : "RESPUESTA VACÍA (num=$numero, qr=$qrUrl). El servidor no está enviando los datos del panel.";
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text("El número de Yape no está disponible. Comunícate con el local.",
+            style: TextStyle(color: AppColors.danger, fontSize: 12.5)),
+        const SizedBox(height: 6),
+        Text(detalle, style: const TextStyle(color: AppColors.gray, fontSize: 11)),
+        TextButton.icon(
+          onPressed: _cargarConfig,
+          icon: const Icon(Icons.refresh_rounded, size: 18),
+          label: const Text("Reintentar"),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final numero = _config?.yapeNumero;
+    final qrUrl = _config?.yapeQrUrl;
+    final hayNumero = numero != null && numero.isNotEmpty;
+    final hayQr = qrUrl != null && qrUrl.isNotEmpty;
+
     return Container(
       margin: const EdgeInsets.only(top: 4, bottom: 10),
       padding: const EdgeInsets.all(14),
@@ -80,36 +198,23 @@ class _YapeFormularioState extends State<YapeFormulario> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("1. Yapea S/. ${widget.total.toStringAsFixed(2)} a este número",
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+          Text(
+            hayQr
+                ? "1. Escanea el QR o yapea S/. ${widget.total.toStringAsFixed(2)} al número"
+                : "1. Yapea S/. ${widget.total.toStringAsFixed(2)} a este número",
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
+          ),
           const SizedBox(height: 8),
           if (_cargando)
             const LinearProgressIndicator(minHeight: 2)
-          else if (numero == null || numero.isEmpty)
-            const Text("El número de Yape no está disponible. Comunícate con el local.",
-                style: TextStyle(color: AppColors.danger, fontSize: 12.5))
+          else if (!hayNumero && !hayQr)
+            _bloqueSinDatos(numero, qrUrl)
           else
-            Row(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(numero, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
-                      if ((_config?.yapeTitular ?? "").isNotEmpty)
-                        Text(_config!.yapeTitular!, style: const TextStyle(color: AppColors.gray, fontSize: 12)),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  tooltip: "Copiar número",
-                  icon: const Icon(Icons.copy_rounded),
-                  onPressed: () {
-                    Clipboard.setData(ClipboardData(text: numero));
-                    ScaffoldMessenger.of(context)
-                        .showSnackBar(const SnackBar(content: Text("Número copiado")));
-                  },
-                ),
+                if (hayQr) _bloqueQr(qrUrl),
+                if (hayNumero) _bloqueNumero(numero),
               ],
             ),
           const SizedBox(height: 14),
