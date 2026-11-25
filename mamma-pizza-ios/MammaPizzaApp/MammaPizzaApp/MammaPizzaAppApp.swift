@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct MammaPizzaApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @State private var auth = AuthStore()
     @State private var carrito = CarritoStore()
     @State private var menu = MenuStore()

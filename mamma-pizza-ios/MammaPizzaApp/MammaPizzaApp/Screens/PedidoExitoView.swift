@@ -5,6 +5,9 @@ struct PedidoExitoView: View {
     var onVerSeguimiento: () -> Void
     var onVolver: () -> Void
     @State private var aparecio = false
+    @State private var tapCount = 0
+    @State private var tapTimer: Timer?
+    @State private var mostrarMinijuego = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,6 +27,21 @@ struct PedidoExitoView: View {
                     .scaleEffect(aparecio ? 1 : 0.3)
             }
             .animation(.spring(duration: 0.7, bounce: 0.35), value: aparecio)
+            .onTapGesture {
+                // Easter egg: 3 toques rápidos en el check verde
+                tapCount += 1
+                tapTimer?.invalidate()
+                tapTimer = Timer.scheduledTimer(withTimeInterval: 0.6, repeats: false) { _ in
+                    tapCount = 0
+                }
+                if tapCount >= 3 {
+                    tapCount = 0
+                    tapTimer?.invalidate()
+                    let generator = UIImpactFeedbackGenerator(style: .heavy)
+                    generator.impactOccurred()
+                    mostrarMinijuego = true
+                }
+            }
 
             VStack(spacing: 6) {
                 Text("¡Pedido recibido!").font(.marca(.largeTitle))
@@ -68,5 +86,11 @@ struct PedidoExitoView: View {
         .fondoApp()
         .sensoryFeedback(.success, trigger: aparecio)
         .onAppear { aparecio = true }
+        .fullScreenCover(isPresented: $mostrarMinijuego) {
+            LanzaPersonasContainer(onClose: {
+                mostrarMinijuego = false
+            })
+            .ignoresSafeArea()
+        }
     }
 }
