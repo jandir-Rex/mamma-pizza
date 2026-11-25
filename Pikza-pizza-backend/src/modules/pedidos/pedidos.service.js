@@ -90,9 +90,18 @@ const TRANSICIONES_VALIDAS = {
   CANCELADO: [],
 };
 
+const INCLUDE_ITEMS_PEDIDO = {
+  productoVariante: {
+    include: { producto: { select: { nombre: true } } },
+  },
+  agregados: {
+    include: { agregado: { select: { nombre: true } } },
+  },
+};
+
 // Include estándar para devolver/emitir un pedido completo (sin la imagen del comprobante)
 const INCLUDE_PEDIDO_COMPLETO = {
-  items: { include: { agregados: true } },
+  items: { include: INCLUDE_ITEMS_PEDIDO },
   pago: true,
   cliente: { select: { nombre: true, telefono: true } },
   direccion: true,
@@ -285,7 +294,7 @@ async function crearPedido(clienteId, rolSolicitante, datos, solicitante) {
         }),
       },
       include: {
-        items: { include: { agregados: true } },
+        items: { include: INCLUDE_ITEMS_PEDIDO },
         pago: true,
         atendidoPor: { select: { id: true, nombre: true, rol: true } },
         historialAtencion: { orderBy: { createdAt: "asc" } },
@@ -338,7 +347,7 @@ async function confirmarPago(pedidoId, metodo, solicitante) {
       where: { id: pedidoId },
       data: { estado: "CONFIRMADO" },
       include: {
-        items: true,
+        items: { include: INCLUDE_ITEMS_PEDIDO },
         pago: true,
         mesa: { select: { numero: true } },
         atendidoPor: { select: { id: true, nombre: true, rol: true } },
@@ -741,7 +750,7 @@ async function asignarRepartidor(pedidoId, repartidorId) {
     return tx.pedido.update({
       where: { id: pedidoId },
       data: { repartidorId },
-      include: { items: true, pago: true },
+      include: { items: { include: INCLUDE_ITEMS_PEDIDO }, pago: true },
     });
   });
 
@@ -815,7 +824,7 @@ async function listarSinRepartidor() {
       estado: { in: ESTADOS_ASIGNABLES },
     },
     include: {
-      items: { include: { agregados: true } },
+      items: { include: INCLUDE_ITEMS_PEDIDO },
       pago: true,
       direccion: true,
       cliente: { select: { nombre: true, telefono: true } },
@@ -872,7 +881,7 @@ async function liberarRepartidor(pedidoId, solicitante) {
     const liberado = await tx.pedido.update({
       where: { id: pedidoId },
       data: { repartidorId: null },
-      include: { items: true, pago: true },
+      include: { items: { include: INCLUDE_ITEMS_PEDIDO }, pago: true },
     });
     return { pedido: liberado, repartidorLiberadoId: actual.repartidorId };
   });
@@ -1019,7 +1028,7 @@ async function misEntregas(usuarioId) {
   return prisma.pedido.findMany({
     where: { repartidorId: repartidor.id, estado: { not: "CANCELADO" } },
     include: {
-      items: { include: { agregados: true } },
+      items: { include: INCLUDE_ITEMS_PEDIDO },
       pago: true,
       direccion: true,
       cliente: { select: { nombre: true, telefono: true } },
@@ -1033,7 +1042,7 @@ async function misEntregas(usuarioId) {
 async function listarPedidosCliente(clienteId) {
   return prisma.pedido.findMany({
     where: { clienteId },
-    include: { items: { include: { agregados: true } }, pago: true },
+    include: { items: { include: INCLUDE_ITEMS_PEDIDO }, pago: true },
     orderBy: { createdAt: "desc" },
   });
 }
@@ -1061,7 +1070,7 @@ async function listarTodos({ desde, hasta } = {}, solicitante) {
   return prisma.pedido.findMany({
     where,
     include: {
-      items: { include: { agregados: true } },
+      items: { include: INCLUDE_ITEMS_PEDIDO },
       pago: true,
       cliente: { select: { nombre: true, telefono: true } },
       mesa: { select: { numero: true } },
@@ -1127,7 +1136,7 @@ async function listarHistorial({ desde, hasta } = {}, solicitante) {
   return prisma.pedido.findMany({
     where,
     include: {
-      items: { include: { agregados: true } },
+      items: { include: INCLUDE_ITEMS_PEDIDO },
       pago: true,
       cliente: { select: { nombre: true, telefono: true } },
       mesa: { select: { numero: true } },
@@ -1211,7 +1220,7 @@ async function auditarPedidos(filtros, solicitante) {
     prisma.pedido.findMany({
       where,
       include: {
-        items: { include: { agregados: true } },
+        items: { include: INCLUDE_ITEMS_PEDIDO },
         pago: true,
         cliente: { select: { nombre: true, telefono: true } },
         mesa: { select: { numero: true } },
@@ -1445,7 +1454,7 @@ async function obtenerPorId(id, solicitante) {
   const pedido = await prisma.pedido.findUnique({
     where,
     include: {
-      items: { include: { agregados: true } },
+      items: { include: INCLUDE_ITEMS_PEDIDO },
       pago: true,
       direccion: true,
       atendidoPor: { select: { id: true, nombre: true, rol: true } },
@@ -1596,7 +1605,7 @@ async function agregarItemsAPedido(pedidoId, items, solicitante) {
       where: { id: pedidoId },
       data: actualizacion,
       include: {
-        items: { include: { agregados: true } },
+        items: { include: INCLUDE_ITEMS_PEDIDO },
         pago: true,
         mesa: true,
         atendidoPor: { select: { id: true, nombre: true, rol: true } },
