@@ -20,7 +20,7 @@ class ApiException implements Exception {
 class ApiClient {
   // En emulador Android usa http://10.0.2.2:4000/api
   // En celular físico usa la IP de tu PC en la red (ej. http://192.168.1.20:4000/api)
-  static const String baseUrl = "http://localhost:4000/api";
+  static const String baseUrl = "https://mamma-pizza-backend.onrender.com";
 
   static Future<String?> _token() async {
     final prefs = await SharedPreferences.getInstance();
